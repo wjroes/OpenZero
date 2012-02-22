@@ -86,10 +86,10 @@
     <Compile Include="Lcd.c">
       <SubType>compile</SubType>
     </Compile>
-    <Compile Include="Rtc.c">
+    <Compile Include="Main.c">
       <SubType>compile</SubType>
     </Compile>
-    <Compile Include="ZeroAbove.c">
+    <Compile Include="Rtc.c">
       <SubType>compile</SubType>
     </Compile>
   </ItemGroup>
