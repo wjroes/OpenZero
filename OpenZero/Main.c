@@ -24,15 +24,17 @@
 #define NTC_SENSOR_ON			PORTF |= (1<<PINF3)
 #define NTC_SENSOR_OFF			PORTF &= ~(1<<PINF3)
 
+#define OPTO_SENSOR_ON			PORTE |= (1<<PINE2);
+#define OPTO_SENSOR_OFF			PORTE &= ~(1<<PINE2);
+
 #include <avr/io.h>
 #include <avr/interrupt.h>
 #include <util/delay.h>
 #include <avr/eeprom.h>
 #include <avr/sleep.h>
 
-#include "Rtc.h"
-#include "ZeroAbove.h"
-#include "Lcd.h"
+#include "Time/Rtc.h"
+#include "Lcd/Lcd.h"
 
 typedef enum 
 {
@@ -72,10 +74,11 @@ volatile unsigned int adcValue = 0;						// in V x 1000
 volatile unsigned int adcVref = 3000;					// in V x 1000
 volatile unsigned int adcTemp = 0;
 
+volatile unsigned int revCounter = 0;
+
 unsigned char findNTCTemp( unsigned int r )
 {
 	// finds the best matching item in a sorted array and returns the index in the array using binary search
-	// TO DO: move this table to EEPROM
 	unsigned int ntcTable[50] = {335,317,301,285,270,256,243,231,219,208,198,188,179,170,162,154,146,139,133,126,120,115,109,104,100,95,91,86,82,79,75,72,68,65,62,60,57,55,52,50,48,46,44,42,40,39,37,35,34,33}; // NTC R values in k Ohm from 0 to 49 in steps of 1 degree
  	unsigned char low = 0;
 	unsigned char mid;
@@ -146,7 +149,7 @@ void doProbe( void )
 	
 	while( probingphase == PROBING_END_CW )
 	{
-				if( BUTTON_OK_PRESSED )
+		if( BUTTON_OK_PRESSED )
 		{
 			_delay_ms( DEBOUNCE_TIME );
 			
@@ -176,19 +179,18 @@ void doProbe( void )
 	runstate = NORMAL_STATE;
 }	
 
-void doTemp( void )
+void Temp_init( void )
 {
 	NTC_SENSOR_ON;
 	
 	ADMUX |= (1<<REFS0)|(1<<MUX0);					// ref. voltage = AVcc, channel = ADC1
-	ADCSRA |= (1<<ADPS2)|(1<<ADIE);					// 1:16 prescaler
-	ADCSRA |= (1<<ADEN);							// enable ADC
+	ADCSRA |= (1<<ADPS2)|(1<<ADPS2)|(1<<ADPS2);		// 1:128 prescaler
+	ADCSRA |= (1<<ADEN)|(1<<ADIE);					// enable ADC
 	ADCSRA |= (1<<ADSC);							// start first conversion
 }
 	
 int main(void)
 {	
-	unsigned long temp;
 	
 	// all pins are input by default, so there's no need to set the direction
 	PORTB |= (1<<PINB0);			// PINB3 = "+" button on wheel, setting PINB3 to 1 enables the internal pull-up
@@ -197,15 +199,26 @@ int main(void)
 	PORTB |= (1<<PINB6);			// PINB6 = "OK" button
 	PORTB |= (1<<PINB7);			// PINB7 = "-" button on wheel
 	
-	DDRE = (1<<PINE6)|(1<<PINE7);	// Pin E6 / Pin E7 provide power to the motor and are both outputs
-	DDRF = (1<<PINF3);				// NTC Pin (PF3) is output
+	DDRE  = (1<<PINE6)|(1<<PINE7);	// Pin E6 / Pin E7 provide power to the motor and are both outputs
+	DDRE |= (1<<PINE2);				// Pin E2 provides power to the opto-sensor and is output
+	DDRF  = (1<<PINF3);				// Pin F3 providers power to the NTC and is output
 	
-	sei();							// Enable Global Interrupts
-	
-	EIMSK |= (1<<PCIE1);			// Enable interrupt-on-change interrupts for PCINT8-PCINT15 which includes the push buttons
+	EIMSK |= (1<<PCIE1)|(1<<PCIE0);	// Enable interrupt-on-change interrupts for PCINT8-PCINT15 which includes the push buttons
+	PCMSK0 |= (1<<PCINT1);
 	PCMSK1 |= (1<<PCINT8)|(1<<PCINT12)|(1<<PCINT13)|(1<<PCINT14)|(1<<PCINT15);
 	
 	LCD_Init();
+	
+	Temp_init();
+	
+	sei();							// Enable Global Interrupts
+	
+	LCD_writeText((unsigned char *)"INIT");
+	
+	_delay_ms( 1000 );
+	
+while(1);
+	
 	Rtc_init();
 	
 	// start a probe run to find the "full open" and "full close" positions
@@ -213,9 +226,6 @@ int main(void)
 
 	runstate = NORMAL_STATE;
 
-	// now go and measure current temperature using the NTC on ADC1
-	doTemp();
-	
 	while (1)
 	{
 		if( BUTTON_TIME_PRESSED )
@@ -468,23 +478,32 @@ ISR(LCD_vect)
 			switch( probingphase )
 			{
 				case PROBING_UNKNOWN :
-					LCD_writeText( "INIT" );
-					break;
-
-				case PROBING_END_CCW :
-					LCD_writeText( "OPEN" );
-					break;
-
-				case PROBING_END_CW :
-					LCD_writeText( "CLSE" );
+					LCD_writeText( (unsigned char *)"INIT" );
 					break;
 
 				case PROBING_START :
 					LCD_writeNum( adcVref );
 					break;
 
+				case PROBING_RUNNING_CCW :
+					LCD_writeText( (unsigned char *)"<<<<" );
+					break;
+					
+				case PROBING_END_CCW :
+					LCD_writeText( (unsigned char *)"OPEN" );
+					break;
+
+				case PROBING_RUNNING_CW :
+//					LCD_writeText( (unsigned char *)">>>>" );
+					LCD_writeNum( revCounter );
+					break;
+				
+				case PROBING_END_CW :
+					LCD_writeText( (unsigned char *)"CLSE" );
+					break;
+
 				case PROBING_END :
-					LCD_writeText( "DONE" );
+					LCD_writeText( (unsigned char *)"DONE" );
 					break;
 
 				default :
@@ -498,7 +517,7 @@ ISR(LCD_vect)
 			switch( timesetphase )
 			{
 				case TIMESET_START :
-					LCD_writeText( "0IME" );
+					LCD_writeText( (unsigned char *)"TIME" );
 					break;
 		
 				case TIMESET_YEAR :
@@ -565,12 +584,19 @@ ISR( ADC_vect )
 			if( probingphase == PROBING_RUNNING_CW )
 			{
 				if( adcValue < ADC_THRESHOLD_CLOSE )
+				{
 					probingphase = 	PROBING_END_CW;
+				}					
 			}
 			else if( probingphase == PROBING_RUNNING_CCW )
 			{
-				if( adcValue < ADC_THRESHOLD_CLOSE )
+				if( adcValue < ADC_THRESHOLD_OPEN )
+				{
 					probingphase = PROBING_END_CCW;
+					
+					// reset the revcounter
+					revCounter = 0;
+				}				
 			}
 			break;
 			
@@ -580,6 +606,12 @@ ISR( ADC_vect )
 			
 	ADCSRA |= (1<<ADSC);							// restart conversion
 }
+
+ISR( PCINT0_vect )
+{
+	// opto-sensor pulse
+	revCounter++;
+}	
 
 ISR( PCINT1_vect )
 {

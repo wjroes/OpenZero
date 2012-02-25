@@ -7,7 +7,7 @@
 
 #include <avr/io.h>
 
-#include "14Segment.h"
+#include "Stk504.h"
 
 int lcdmap_stk504[] = 
 {

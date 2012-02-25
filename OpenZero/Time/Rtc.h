@@ -15,6 +15,7 @@ extern volatile time rtc;
 
 void Rtc_init(void);
 void set_clock( void );
+char is_not_leapyear( void );  
 
 #endif 
 

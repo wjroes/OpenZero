@@ -54,6 +54,7 @@
     <GenerateMapFile>True</GenerateMapFile>
     <GenerateListFile>True</GenerateListFile>
     <GenerateEepFile>True</GenerateEepFile>
+    <PostBuildEvent>avrdude -c usbasp -p m169 -U flash:w:$(OutputDirectory)\$(SolutionName).hex:i</PostBuildEvent>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
     <ToolchainSettings>
@@ -75,23 +76,28 @@
       </MemorySegments>
     </MemorySettings>
     <GenerateHexFile>True</GenerateHexFile>
-    <GenerateMapFile>True</GenerateMapFile>
-    <GenerateListFile>True</GenerateListFile>
-    <GenerateEepFile>True</GenerateEepFile>
+    <GenerateMapFile>False</GenerateMapFile>
+    <GenerateListFile>False</GenerateListFile>
+    <GenerateEepFile>False</GenerateEepFile>
+    <PostBuildEvent>avrdude -c usbasp -p m169 -U flash:w:$(OutputDirectory)\$(SolutionName).hex:i</PostBuildEvent>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="14Segment.c">
+    <Compile Include="Lcd\Lcd.c">
       <SubType>compile</SubType>
     </Compile>
-    <Compile Include="Lcd.c">
+    <Compile Include="Lcd\ZeroLcd.c">
       <SubType>compile</SubType>
     </Compile>
     <Compile Include="Main.c">
       <SubType>compile</SubType>
     </Compile>
-    <Compile Include="Rtc.c">
+    <Compile Include="Time\Rtc.c">
       <SubType>compile</SubType>
     </Compile>
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="Lcd" />
+    <Folder Include="Time" />
   </ItemGroup>
   <Import Project="$(AVRSTUDIO_EXE_PATH)\\Vs\\AvrGCC.targets" />
 </Project>
