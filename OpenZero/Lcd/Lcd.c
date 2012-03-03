@@ -14,11 +14,6 @@
 
 volatile uint16_t ticker = 0;
 
-ISR(TIMER0_OVF_vect) 
-{ 
-	ticker++;
-}
-
 void LCD_Init(void)
 {
 	/* Use 32 kHz crystal oscillator */
@@ -32,7 +27,7 @@ void LCD_Init(void)
 	/* Enable LCD, default waveform and interrupt enabled */
 	LCDCRA = (1<<LCDEN) | (1<<LCDIE);
 
-	// timer0 is being used a timer for the ticker tape	
+	// timer0 
 	TCCR0A = (1<<CS02)|(1<<CS00);	// timer clock = system clock / 1024
 	TIFR0 = (1<<TOV0);				// clear pending interrupts
 	TIMSK0 = (1<<TOIE0);			// enable timer0 overflow Interrupt
@@ -131,6 +126,22 @@ void LCD_blinkMinutes( void )
 		Lcd_Map(2,'0'+(rtc.minute/10)%10);
 		Lcd_Map(3,'0'+rtc.minute%10);
 	}		
+}
+	
+void LCD_showTemp( uint8_t temp )
+{
+	if( temp>=100 )
+		Lcd_Map(0,'0'+(temp/100)%10);
+	else
+		Lcd_Map(0,' ');
+	if(temp>=10)
+		Lcd_Map(1,'0'+(temp/10)%10);
+	else
+		Lcd_Map(1,' ');
+	Lcd_Map(2,'0'+temp%10);
+	Lcd_Map(3,'.');
+	
+	// or use itoa() function
 }
 	
 void LCD_showTime( void )

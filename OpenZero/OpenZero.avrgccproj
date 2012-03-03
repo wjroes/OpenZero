@@ -85,7 +85,13 @@
     <Compile Include="Lcd\Lcd.c">
       <SubType>compile</SubType>
     </Compile>
+    <Compile Include="Lcd\Lcd.h">
+      <SubType>compile</SubType>
+    </Compile>
     <Compile Include="Lcd\ZeroLcd.c">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="Lcd\ZeroLcd.h">
       <SubType>compile</SubType>
     </Compile>
     <Compile Include="Main.c">
@@ -97,6 +103,7 @@
   </ItemGroup>
   <ItemGroup>
     <Folder Include="Lcd" />
+    <Folder Include="Temperature" />
     <Folder Include="Time" />
   </ItemGroup>
   <Import Project="$(AVRSTUDIO_EXE_PATH)\\Vs\\AvrGCC.targets" />

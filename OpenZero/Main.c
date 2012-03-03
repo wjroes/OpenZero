@@ -8,11 +8,11 @@
 
 #define DEBOUNCE_TIME			50			// msec
 
-#define ADC_THRESHOLD_CLOSE		915			// adc value cut off point while closing
-#define ADC_THRESHOLD_OPEN		915			// adc value cut off point while opening
+#define ADC_THRESHOLD_CLOSE		965			// adc value cut off point while closing
+#define ADC_THRESHOLD_OPEN		965			// adc value cut off point while opening
 
-#define BUTTON_TIME_PRESSED		bit_is_clear( PINB, PINB4 )
-#define BUTTON_MENU_PRESSED		bit_is_clear( PINB, PINB5 )
+#define BUTTON_TIME_PRESSED		bit_is_clear( PINB, PINB5 )
+#define BUTTON_MENU_PRESSED		bit_is_clear( PINB, PINB4 )
 #define BUTTON_OK_PRESSED		bit_is_clear( PINB, PINB6 )
 #define BUTTON_UP_PRESSED		bit_is_clear( PINB, PINB0 )
 #define BUTTON_DOWN_PRESSED		bit_is_clear( PINB, PINB7 )
@@ -35,10 +35,12 @@
 
 #include "Time/Rtc.h"
 #include "Lcd/Lcd.h"
+#include "Lcd/ZeroLcd.h"
 
 typedef enum 
 {
 	NORMAL_STATE,
+	MENU_STATE,
 	PROBING_STATE,
 	TIMESET_STATE,
 } RUNSTATE;
@@ -179,7 +181,7 @@ void doProbe( void )
 	runstate = NORMAL_STATE;
 }	
 
-void Temp_init( void )
+void doTemp( void )
 {
 	NTC_SENSOR_ON;
 	
@@ -190,7 +192,10 @@ void Temp_init( void )
 }
 	
 int main(void)
-{	
+{
+	PORTB |= (1<<PINB3);			// PINB3 = "+" button on wheel, setting PINB3 to 1 enables the internal pull-up
+	PORTB |= (1<<PINB2);			// PINB3 = "+" button on wheel, setting PINB3 to 1 enables the internal pull-up
+	PORTB |= (1<<PINB1);			// PINB3 = "+" button on wheel, setting PINB3 to 1 enables the internal pull-up
 	
 	// all pins are input by default, so there's no need to set the direction
 	PORTB |= (1<<PINB0);			// PINB3 = "+" button on wheel, setting PINB3 to 1 enables the internal pull-up
@@ -203,31 +208,51 @@ int main(void)
 	DDRE |= (1<<PINE2);				// Pin E2 provides power to the opto-sensor and is output
 	DDRF  = (1<<PINF3);				// Pin F3 providers power to the NTC and is output
 	
-	EIMSK |= (1<<PCIE1)|(1<<PCIE0);	// Enable interrupt-on-change interrupts for PCINT8-PCINT15 which includes the push buttons
-	PCMSK0 |= (1<<PCINT1);
-	PCMSK1 |= (1<<PCINT8)|(1<<PCINT12)|(1<<PCINT13)|(1<<PCINT14)|(1<<PCINT15);
+//	EIMSK |= (1<<PCIE1)|(1<<PCIE0);	// Enable interrupt-on-change interrupts for PCINT8-PCINT15 which includes the push buttons
+//	PCMSK0 |= (1<<PCINT1);
+//	PCMSK1 |= (1<<PCINT8)|(1<<PCINT12)|(1<<PCINT13)|(1<<PCINT14)|(1<<PCINT15);
 	
 	LCD_Init();
 	
-	Temp_init();
+	Rtc_init();
 	
 	sei();							// Enable Global Interrupts
 	
-	LCD_writeText((unsigned char *)"INIT");
-	
-	_delay_ms( 1000 );
-	
-while(1);
-	
-	Rtc_init();
-	
 	// start a probe run to find the "full open" and "full close" positions
-	doProbe();
+//	doProbe();
 
+	doTemp();
+	
 	runstate = NORMAL_STATE;
-
+	
 	while (1)
 	{
+		if( BUTTON_MENU_PRESSED )
+		{
+			_delay_ms( DEBOUNCE_TIME );
+			
+			// poll again after a debounce period
+			if( BUTTON_MENU_PRESSED )
+			{
+				// wait until button is released
+				while( BUTTON_MENU_PRESSED ) ;						
+				// continue here if button is still depressed
+				
+				switch( runstate )
+				{
+					case NORMAL_STATE :
+						runstate = MENU_STATE;
+						break;
+						
+					default :
+						runstate = NORMAL_STATE;
+						break;
+				}
+				
+			}			
+		} // end if( BUTTON_MENU_PRESSED )
+		
+		
 		if( BUTTON_TIME_PRESSED )
 		{
 			_delay_ms( DEBOUNCE_TIME );
@@ -309,8 +334,6 @@ while(1);
 		
 		if( BUTTON_UP_PRESSED )
 		{
-			_delay_ms( DEBOUNCE_TIME );
-			
 			// poll again after a debounce period
 			if( BUTTON_UP_PRESSED )
 			{
@@ -389,8 +412,6 @@ while(1);
 
 		if( BUTTON_DOWN_PRESSED )
 		{
-			_delay_ms( DEBOUNCE_TIME );
-			
 			// poll again after a debounce period
 			if( BUTTON_DOWN_PRESSED )
 			{
@@ -463,16 +484,29 @@ while(1);
 		} // end if( BUTTON_DOWN_PRESSED )
 
 		// go to sleep but wake up if any button is pressed
-		set_sleep_mode( SLEEP_MODE_ADC );
-		sleep_mode();
+//		set_sleep_mode( SLEEP_MODE_ADC );
+//		sleep_mode();
 	} // end while forever
 
 }
 
 ISR(LCD_vect) 
 { 
+	if( bit_is_set( ADCSRA, ADSC ) )
+	{
+		Lcd_Symbol( LOCK, 1 );
+	}
+	else
+	{
+		Lcd_Symbol( LOCK, 0 );
+	}				
+	
 	switch( runstate )
 	{
+		case MENU_STATE :
+			LCD_writeText((unsigned char *)"MENU");
+			break;
+			
 		case PROBING_STATE :
 		
 			switch( probingphase )
@@ -486,7 +520,7 @@ ISR(LCD_vect)
 					break;
 
 				case PROBING_RUNNING_CCW :
-					LCD_writeText( (unsigned char *)"<<<<" );
+					LCD_writeNum( adcValue );
 					break;
 					
 				case PROBING_END_CCW :
@@ -494,8 +528,7 @@ ISR(LCD_vect)
 					break;
 
 				case PROBING_RUNNING_CW :
-//					LCD_writeText( (unsigned char *)">>>>" );
-					LCD_writeNum( revCounter );
+					LCD_writeNum( adcValue );
 					break;
 				
 				case PROBING_END_CW :
@@ -545,9 +578,8 @@ ISR(LCD_vect)
 			}			
 		
 		default:
-			LCD_writeNum( adcTemp );
-
-		break;
+			LCD_showTemp( adcTemp );
+			break;
 	}				
 }
 
@@ -561,14 +593,17 @@ ISR( ADC_vect )
 	switch( runstate )
 	{
 		case NORMAL_STATE :
-			temp = adcValue;
-			temp *= adcVref;
-			temp /= 1024;			// this is the measured voltage x 1000
-			
-			temp *= 120;
-			temp /= adcVref;		// in k Ohms, this is the calculated R of the NTC based on the Vadc and Vref measured earlier
+			// Rt = 120k / ( 1024 / adc - 1.0 )
+			temp = 1024000;
+			temp /= adcValue;
+			temp -= 1000;
+			temp = 120000 / temp;	// in k Ohms, this is the calculated R of the NTC based on Vcc
 			
 			adcTemp = findNTCTemp( (unsigned int)temp );
+
+			NTC_SENSOR_OFF;
+			ADCSRA &= ~(1<<ADEN)|(1<<ADIE);		// disable ADC
+		
 			break;
 			
 		case PROBING_STATE :
@@ -605,6 +640,18 @@ ISR( ADC_vect )
 	}	
 			
 	ADCSRA |= (1<<ADSC);							// restart conversion
+}
+
+ISR(TIMER0_OVF_vect) 
+{ 
+	ticker++;
+	
+	// if we're not doing an ADC conversion already
+	if( bit_is_clear( PINF, PINF3 ) )
+	{
+		NTC_SENSOR_ON;
+		ADCSRA |= (1<<ADSC);							// start conversion
+	}
 }
 
 ISR( PCINT0_vect )
