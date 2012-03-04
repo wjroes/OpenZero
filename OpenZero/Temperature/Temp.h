@@ -5,10 +5,10 @@
 	#define F_CPU				1000000UL
 #endif
 
-#define MAXTEMP					500						// in 0.1 degrees C
+#define MAXTEMP					500U						// in 0.1 degrees C
 
-#define NTC_SENSOR_ON			PORTF |= (1<<PINF3)
-#define NTC_SENSOR_OFF			PORTF &= ~(1<<PINF3)
+#define NTC_SENSOR_ON			PORTF |= (1<<PF3)
+#define NTC_SENSOR_OFF			PORTF &= ~(1<<PF3)
 
 #include <avr/io.h>
 #include <avr/interrupt.h>

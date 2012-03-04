@@ -18,13 +18,6 @@
 #define BUTTON_UP_PRESSED		bit_is_clear( PINB, PB0 )
 #define BUTTON_DOWN_PRESSED		bit_is_clear( PINB, PB7 )
 
-#define RUN_MOTOR_CW			PORTE |= (1<<PE7)&~(1<<PE6)
-#define RUN_MOTOR_CCW			PORTE |= (1<<PE6)&~(1<<PE7)
-#define STOP_MOTOR				PORTE &= ~((1<<PE6)|(1<<PE7))
-
-#define OPTO_SENSOR_ON			PORTE |= (1<<PE2);
-#define OPTO_SENSOR_OFF			PORTE &= ~(1<<PE2);
-
 typedef enum {
 	TEMP,
 	TIME,

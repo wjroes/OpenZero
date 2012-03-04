@@ -10,9 +10,6 @@ unsigned char previousRotaryState = 0;
 	
 void initControls( void )
 {
-	DDRB &= (1<<PB0);
-	DDRB &= (1<<PB7);
-	
 	// all pins are input by default, so there's no need to set the direction
 	PORTB |= (1<<PB0);				// PINB0 = "+" button on wheel, setting to 1 enables the internal pull-up
 	PORTB |= (1<<PB4);				// PINB4 = "MENU" button
@@ -23,10 +20,6 @@ void initControls( void )
 // Why can I not get PCINT1_vector to work???
 //	EIMSK |= (1<<PCIE1);				// Enable interrupt-on-change interrupts for PCINT8-PCINT15 which includes the push buttons
 //	PCMSK1 |= (1<<PCINT8)|(1<<PCINT12)|(1<<PCINT13)|(1<<PCINT14)|(1<<PCINT15);
-	
-	DDRE  = (1<<DDE6)|(1<<DDE7);	// Pin E6 / Pin E7 provide power to the motor and are both outputs
-	DDRE |= (1<<DDE2);				// Pin E2 provides power to the opto-sensor and is output
-	DDRF  = (1<<DDF3);				// Pin F3 providers power to the NTC and is output
 }
 
 ROTARYBUTTON readRotaryButton( void )

@@ -171,7 +171,7 @@ void Lcd_FillBar( unsigned char index )
 {
 	for( unsigned char i = 0; i<MAXBARS; i++ )
 	{
-		Lcd_Bar( i, (i<=index) );
+		Lcd_Bar( i, i<index );
 	}	
 }
 	

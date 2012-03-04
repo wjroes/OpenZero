@@ -18,6 +18,7 @@
 #include "Time/Rtc.h"
 #include "Lcd/Lcd.h"
 #include "Lcd/ZeroLcd.h"
+#include "Valve/Valve.h"
 #include "Temperature/Temp.h"
 #include "Controls/Controls.h"
 
@@ -37,7 +38,8 @@ int main(void)
 	initRTC();
 	initControls();
 	initLCD();
-	
+	initValve();
+
 	// timer0 
 	TCCR0A = (1<<CS02)|(1<<CS00);	// timer clock = system clock / 1024
 	TIFR0 = (1<<TOV0);				// clear pending interrupts
@@ -46,8 +48,10 @@ int main(void)
 	sei();							// Enable Global Interrupts
 	
 	// start a probe run to find the "fully open" and "fully closed" positions
-//	doProbe();
+	doProbe();
 
+	// initialize the NTC sensor and start the 1st measurement
+	// consequent measurements will be done every tick
 	initTemp();
 	
 	runstate = NORMAL_STATE;
@@ -169,7 +173,7 @@ int main(void)
 					break;
 						
 				case TEMPSET_STATE :
-					if( targetTemp >= MAXTEMP )
+					if( targetTemp >= 500 )
 						targetTemp = 0;
 					else
 						targetTemp += 5;
@@ -219,6 +223,7 @@ ISR(LCD_vect)
 { 
 	Lcd_SymbolsOff();	
 	Lcd_DaysOff();
+	Lcd_FillBar( 0 );
 	
 	if( ADC_CONVERSION_BUSY )
 		Lcd_Symbol( LOCK, 1 );
@@ -292,19 +297,21 @@ ISR(LCD_vect)
 					break;
 
 				case PROBING_RUNNING_CCW :
+					Lcd_Symbol( INSIDE, 1);
 					LCD_writeNum( adcValue );
 					break;
 					
 				case PROBING_END_CCW :
-					LCD_writeText( (unsigned char *)"OPEN" );
+					LCD_writeText( (unsigned char *)"CLSD" );
 					break;
 
 				case PROBING_RUNNING_CW :
+					Lcd_Symbol( OUTSIDE, 1);
 					LCD_writeNum( adcValue );
 					break;
 				
 				case PROBING_END_CW :
-					LCD_writeText( (unsigned char *)"CLSE" );
+					LCD_writeText( (unsigned char *)"OPEN" );
 					break;
 
 				case PROBING_END :
@@ -312,7 +319,7 @@ ISR(LCD_vect)
 					break;
 
 				default :
-					LCD_writeNum( adcValue );
+					LCD_writeNum( revCounter );
 					break;
 			}
 			break;
@@ -372,49 +379,46 @@ ISR( ADC_vect )
 
 			if( probingphase == PROBING_RUNNING_CW )
 			{
-				if( adcValue < ADC_THRESHOLD_CLOSE )
+				if( adcValue < ADC_THRESHOLD_OPEN )
 				{
+					LCD_writeText( (unsigned char *)"REVS");
+					_delay_ms( 1000 );
+					LCD_writeNum( revCounter );
+					revCounter = 0;
+					_delay_ms( 3000 );
+					
 					probingphase = 	PROBING_END_CW;
 				}					
 			}
 			else if( probingphase == PROBING_RUNNING_CCW )
 			{
-				if( adcValue < ADC_THRESHOLD_OPEN )
+				if( adcValue < ADC_THRESHOLD_CLOSE )
 				{
-					probingphase = PROBING_END_CCW;
-					
-					// reset the revcounter
+					LCD_writeText( (unsigned char *)"REVS");
+					_delay_ms( 1000 );
+					LCD_writeNum( revCounter );
 					revCounter = 0;
+					_delay_ms( 3000 );
+					
+					probingphase = PROBING_END_CCW;
 				}				
 			}
+			
+			ADCSRA |= (1<<ADSC);							// restart conversion
 			break;
 			
 		default:
 			break;
 	}	
-			
-	ADCSRA |= (1<<ADSC);							// restart conversion
 }
 
 ISR(TIMER0_OVF_vect) 
 { 
 	LCD_tick();
 	
-	switch( runstate )
-	{
-		case NORMAL_STATE :
-			// if NTC sensor is off
-			// start a temp check
-			if( bit_is_clear( PINF, PF3 ) )
-			{
-				NTC_SENSOR_ON;
-				ADCSRA |= (1<<ADSC);							// start conversion
-			}
-			break;
-			
-		default:
-			break;
-	}	
+	NTC_SENSOR_ON;
+	ADCSRA |= (1<<ADSC);							// start conversion
+
 }
 
 ISR( PCINT0_vect )

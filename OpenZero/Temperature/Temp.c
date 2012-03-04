@@ -10,10 +10,11 @@ unsigned int targetTemp = 200;
 
 void initTemp( void )
 {
+	DDRF  = (1<<DDF3);								// Pin F3 providers power to the NTC and is output
 	NTC_SENSOR_ON;
 	
-	ADMUX |= (1<<REFS0)|(1<<MUX0);					// ref. voltage = AVcc, channel = ADC1
-	ADCSRA |= (1<<ADPS2)|(1<<ADPS2)|(1<<ADPS2);		// 1:128 prescaler
+	ADMUX = (1<<REFS0)|(1<<MUX0);					// ref. voltage = AVcc, channel = ADC1
+	ADCSRA = (1<<ADPS2)|(1<<ADPS2)|(1<<ADPS2);		// 1:128 prescaler
 	ADCSRA |= (1<<ADEN)|(1<<ADIE);					// enable ADC
 	ADCSRA |= (1<<ADSC);							// start first conversion
 }

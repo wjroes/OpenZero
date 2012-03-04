@@ -4,25 +4,26 @@
  * Created: 3-3-2012 14:05:45
  *  Author: Willem
  */ 
-#ifndef F_CPU
-	#define F_CPU		1000000UL
-#endif
+#include "Valve.h"
 
-#include <avr/io.h>
-#include <avr/interrupt.h>
-#include <util/delay.h>
-#include <avr/eeprom.h>
-#include <avr/sleep.h>
+void initValve( void )
+{
+	DDRE |= (1<<DDE6)|(1<<DDE7);	// Pin E6 / Pin E7 provide power to the motor and are both outputs
+	DDRE |= (1<<DDE2);				// Pin E2 provides power to the opto-sensor LED and is output
 
-#include "../Controls/Controls.h"
-#include "../Main.h"
+	DDRE &= ~(1<<DDE1);				// PINE1 = PCINT1 attached to opto-sensor collector is input
+	PORTE |= (1<<PE1);				// PINE1 = PCINT1 attached to opto-sensor collector, enable internal pull-up
+	
+	EIMSK |= (1<<PCIE0);			// Enable interrupt-on-change interrupts for PCINT0-PCINT7
+	PCMSK0 |= (1<<PCINT1);			// But only mask PCINT1
+}
 
 void doProbe( void )
 {
 	runstate = PROBING_STATE;
 	
-	ADMUX |= (1<<REFS0)|(1<<MUX1);					// ref. voltage = AVcc, channel = ADC2
-	ADCSRA |= (1<<ADPS2)|(1<<ADIE);					// 1:16 prescaler
+	ADMUX = (1<<REFS0)|(1<<MUX1);					// ref. voltage = AVcc, channel = ADC2
+	ADCSRA = (1<<ADPS2)|(1<<ADIE);					// 1:16 prescaler
 	
 	_delay_ms( 300 );
 	
@@ -35,61 +36,35 @@ void doProbe( void )
 	set_sleep_mode( SLEEP_MODE_ADC );
 	sleep_mode();
 	
-	probingphase = PROBING_RUNNING_CCW;
-	RUN_MOTOR_CCW;
-	while( probingphase == PROBING_RUNNING_CCW ) ;
+	OPTO_SENSOR_ON;
+	
+	probingphase = PROBING_RUNNING_CW;
+	RUN_MOTOR_CW;
+	while( probingphase == PROBING_RUNNING_CW ) ;
 
 	STOP_MOTOR;
 	
-	while( probingphase == PROBING_END_CCW) 
-	{
-		if( BUTTON_OK_PRESSED )
-		{
-			_delay_ms( DEBOUNCE_TIME );
-			
-			// poll again after a debounce period
-			if( BUTTON_OK_PRESSED )
-			{
-				// wait until button is released
-				while( BUTTON_OK_PRESSED ) ;						
-				// continue here if button is still depressed
-				
-				probingphase = PROBING_RUNNING_CW;
-			}
-		}
-	}		
+	while( !okButtonPressed() ) ;
 	
-	RUN_MOTOR_CW;
-	while( probingphase == PROBING_RUNNING_CW ) ;
+	probingphase = PROBING_RUNNING_CCW;
+	RUN_MOTOR_CCW;
+	while( probingphase == PROBING_RUNNING_CCW ) ;
 	
 	STOP_MOTOR;
 	
-	while( probingphase == PROBING_END_CW )
-	{
-		if( BUTTON_OK_PRESSED )
-		{
-			_delay_ms( DEBOUNCE_TIME );
-			
-			// poll again after a debounce period
-			if( BUTTON_OK_PRESSED )
-			{
-				// wait until button is released
-				while( BUTTON_OK_PRESSED ) ;						
-				// continue here if button is still depressed
-				
-				probingphase = PROBING_RUNNING_CCW;
-			}
-		}
-	}	
-	
-	RUN_MOTOR_CCW;
-	while( probingphase == PROBING_RUNNING_CCW ) ;
+	while( !okButtonPressed() ) ;
+
+	probingphase = PROBING_RUNNING_CW;
+	RUN_MOTOR_CW;
+	while( probingphase == PROBING_RUNNING_CW ) ;
 
 	STOP_MOTOR;
 	
 	probingphase = PROBING_END;
 
 	ADCSRA &= ~((1<<ADEN)|(1<<ADIE));					// disable ADC
+
+	OPTO_SENSOR_OFF;
 	
 	_delay_ms( 300 );
 
