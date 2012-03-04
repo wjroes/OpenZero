@@ -15,14 +15,6 @@
  * minute, and the 8th LED represents the hour.
  *
  ******************************************************************************************/ 
-#ifndef F_CPU
-	#define F_CPU		1000000UL
-#endif
-
-#include <avr/io.h>
-#include <avr/interrupt.h>
-#include <avr/eeprom.h>
-
 #include "Rtc.h"
 
 // these EEMEM variable declarations are just used as 'labels' into the EEPROM space
@@ -33,16 +25,29 @@ uint8_t EEMEM	EE_days;
 uint8_t EEMEM	EE_months;
 uint16_t EEMEM	EE_years;
 
-volatile time rtc;
+volatile _RTC rtc;
 
+unsigned char calcDOW( void )
+{
+    unsigned char t[] = {0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4};
+	unsigned int y = rtc.year;
+	unsigned int result;
+	
+	y -= (rtc.month < 3);
+    result = (y + y/4 - y/100 + y/400 + t[rtc.month-1] + rtc.date - 1) % 7;
+	return (unsigned char)result;
+}
+   
 void initRTC(void)  
-{                                
+{         
 	rtc.second = 0;
 	rtc.minute = (unsigned int)eeprom_read_byte(&EE_minutes);
 	rtc.hour = (unsigned int)eeprom_read_byte(&EE_hours);
 	rtc.date = (unsigned int)eeprom_read_byte(&EE_days);
 	rtc.month = (unsigned int)eeprom_read_byte(&EE_months);
 	rtc.year = (unsigned int)eeprom_read_word(&EE_years);
+	
+	rtc.dow = calcDOW();
 	
 	TIMSK2 = ~((1<<TOIE2)|(1<<OCIE2A));		// disable TC2 interrupt
 	
@@ -57,11 +62,8 @@ void initRTC(void)
     TIMSK2 = (1<<TOIE2);					// enable Timer/Counter2 Overflow Interrupt                             
 }
 
-void update_clock( void )
+void save_clock( void )
 {
-	rtc.second++;
-	set_clock();
-	
 	if( rtc.minute!=(unsigned int)eeprom_read_byte(&EE_minutes) )
 		eeprom_write_byte( &EE_minutes, (uint8_t)rtc.minute);
 	if( rtc.hour!=(unsigned int)eeprom_read_byte(&EE_hours) )
@@ -72,17 +74,17 @@ void update_clock( void )
 		eeprom_write_byte( &EE_months, (uint8_t)rtc.month);
 	if( rtc.year!=(unsigned int)eeprom_read_word(&EE_years) )
 		eeprom_write_word( &EE_years, (uint16_t)rtc.year);
-}        
- 
-char is_not_leapyear( void )      
+}
+	
+unsigned char is_not_leapyear( void )      
 {
     if (!(rtc.year%100))
-        return (char)(rtc.year%400);
+        return (unsigned char)(rtc.year%400);
     else
-        return (char)(rtc.year%4);
+        return (unsigned char)(rtc.year%4);
 }         
 
-void set_clock( void )
+void update_clock( void )
 {
     if (rtc.second==60)        
     {
@@ -92,6 +94,12 @@ void set_clock( void )
             rtc.minute=0;
             if (++rtc.hour==24)
             {
+				// update dow
+				rtc.dow = calcDOW();
+				
+				// save the clock to eeprom every hour on the hour in case battery runs out or is replaced
+				save_clock();
+				
                 rtc.hour=0;
                 if (++rtc.date==32)
                 {
@@ -132,9 +140,140 @@ void set_clock( void )
     }  
 }
 	
+void increaseClock( TIMESETPHASE timesetphase )
+{
+	switch( timesetphase )
+	{
+		case TIMESET_YEAR :
+			rtc.year++;
+			if( rtc.year >= 2100 )
+				rtc.year = 2012;
+			break;
+						
+		case TIMESET_MONTH :
+			rtc.month++;
+			if( rtc.month == 13 )
+				rtc.month = 1;
+			break;
+						
+		case TIMESET_DATE :
+			rtc.date++;
+			if (rtc.date==32)
+			{
+				rtc.date=1;
+			}
+			else if (rtc.date==31) 
+			{                    
+				if ((rtc.month==4) || (rtc.month==6) || (rtc.month==9) || (rtc.month==11)) 
+				{
+					rtc.date=1;
+				}
+			}
+			else if (rtc.date==30)
+			{
+				if(rtc.month==2)
+				{
+					rtc.date=1;
+				}
+			}              
+			else if (rtc.date==29) 
+			{
+				if((rtc.month==2) && (is_not_leapyear()))
+				{
+					rtc.date=1;
+				}                
+			}                          
+			break;
+						
+		case TIMESET_HOURS :
+			rtc.hour++;
+			if( rtc.hour >= 24 )
+				rtc.hour = 0;
+			break;
+						
+		case TIMESET_MINUTES :
+			rtc.minute++;
+			if( rtc.minute >= 60 )
+				rtc.minute = 0;
+			break;
+								
+		default :
+			break;
+	}
+	
+	rtc.dow = calcDOW();
+	save_clock();
+}		
+
+void decreaseClock( TIMESETPHASE timesetphase )
+{
+	switch( timesetphase )
+	{
+		case TIMESET_YEAR :
+			if( rtc.year > 2012 )
+				rtc.year--;
+			break;
+						
+		case TIMESET_MONTH :
+			rtc.month--;
+			if( rtc.month == 0 )
+				rtc.month = 12;
+			break;
+						
+		case TIMESET_DATE :
+			rtc.date--;
+			if (rtc.date==0) 
+			{                    
+				if ((rtc.month==4) || (rtc.month==6) || (rtc.month==9) || (rtc.month==11)) 
+				{
+					rtc.date=30;
+				}
+				else if((rtc.month==2) && (is_not_leapyear()))
+				{
+					rtc.date=28;
+				}                
+				else if(rtc.month==2)
+				{
+					rtc.date=29;
+				}
+				else
+				{
+					rtc.date = 31;
+				}									
+			}                          
+			break;
+						
+		case TIMESET_HOURS :
+			if( rtc.hour == 0 )
+				rtc.hour = 23;
+			else
+				rtc.hour--;
+			break;
+						
+		case TIMESET_MINUTES :
+			if( rtc.minute == 0 )
+				rtc.minute = 59;
+			else
+				rtc.minute--;
+			break;
+								
+		default :
+			break;
+	}
+	
+	rtc.dow = calcDOW();
+	save_clock();
+}
+	
+void tick( void )
+{
+	rtc.second++;
+	update_clock();
+}        
+ 
 ISR(TIMER2_OVF_vect)
 {
-	update_clock();
+	tick();
 }  
 
         

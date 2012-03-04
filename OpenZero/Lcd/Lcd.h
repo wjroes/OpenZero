@@ -3,15 +3,17 @@
 
 #define LCD_MAX_CHARS	4
 
-extern volatile uint16_t lcd_blinker;
-
 void initLCD(void);
+
+void LCD_tick( void );
 
 void LCD_blinkYears( void );
 void LCD_blinkMonths( void );
 void LCD_blinkDate( void );
 void LCD_blinkHours( void );
 void LCD_blinkMinutes( void );
+void LCD_showDay( void );
+void LCD_showSecondsBar( void );
 void LCD_showTime( void );
 void LCD_tickertape( unsigned char *text, unsigned char len );
 void LCD_writeText( unsigned char *text );

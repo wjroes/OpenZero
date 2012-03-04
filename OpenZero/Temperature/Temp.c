@@ -4,18 +4,9 @@
  * Created: 3-3-2012 14:07:33
  *  Author: Willem
  */ 
-#ifndef F_CPU
-	#define F_CPU		1000000UL
-#endif
-
-
-#include <avr/io.h>
-#include <avr/interrupt.h>
-#include <util/delay.h>
-#include <avr/eeprom.h>
-#include <avr/sleep.h>
-
 #include "Temp.h"
+
+unsigned int targetTemp = 200;
 
 void initTemp( void )
 {

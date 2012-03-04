@@ -4,6 +4,10 @@
  * Created: 15-2-2012 21:16:33
  *  Author: Willem
  */ 
+#ifndef F_CPU
+	#define F_CPU					1000000UL
+#endif
+
 #include <avr/io.h>
 #include <avr/interrupt.h>
 #include <util/delay.h>
@@ -28,15 +32,11 @@ volatile unsigned int adcTemp = 0;
 
 volatile unsigned int revCounter = 0;
 
-volatile unsigned char menuItem = 0;
-
-volatile unsigned char *lcd_text = "    ";
-
 int main(void)
 {
-	initLCD();
 	initRTC();
 	initControls();
+	initLCD();
 	
 	// timer0 
 	TCCR0A = (1<<CS02)|(1<<CS00);	// timer clock = system clock / 1024
@@ -54,110 +54,102 @@ int main(void)
 	
 	while (1)
 	{
-		if( BUTTON_MENU_PRESSED )
+		if( menuButtonPressed() )
 		{
-			_delay_ms( DEBOUNCE_TIME );
-			
-			// poll again after a debounce period
-			if( BUTTON_MENU_PRESSED )
+			switch( runstate )
 			{
-				// wait until button is released
-				while( BUTTON_MENU_PRESSED ) ;						
-				// continue here if button is still depressed
-				
-				switch( runstate )
-				{
-					case NORMAL_STATE :
-						runstate = MENU_STATE;
-						break;
+				case NORMAL_STATE :
+					runstate = MENU_STATE;
+					break;
 						
-					default :
-						runstate = NORMAL_STATE;
-						break;
-				}
-				
-			}			
-		} // end if( BUTTON_MENU_PRESSED )
-		
-		
-		if( BUTTON_TIME_PRESSED )
-		{
-			_delay_ms( DEBOUNCE_TIME );
-			
-			// poll again after a debounce period
-			if( BUTTON_TIME_PRESSED )
-			{
-				// wait until button is released
-				while( BUTTON_TIME_PRESSED ) ;						
-				// continue here if button is still depressed
-				
-				switch( runstate )
-				{
-					case NORMAL_STATE :
-						// show "TIME" in display
-						runstate = TIMESET_STATE;
-						timesetphase = TIMESET_START;
-						
-						_delay_ms( 500 );
-						
-						// show time with hours blinking
-						timesetphase = TIMESET_YEAR;
-						break;
-						
-					default :
-						runstate = NORMAL_STATE;
-						break;
-				}
-				
-			}			
-		} // end if( BUTTON_TIME_PRESSED )
-		
-		if( BUTTON_OK_PRESSED )
-		{
-			_delay_ms( DEBOUNCE_TIME );
-			
-			// poll again after a debounce period
-			if( BUTTON_OK_PRESSED )
-			{
-				// wait until button is released
-				while( BUTTON_OK_PRESSED ) ;						
-				// continue here if button is still depressed
-				
-				switch( runstate )
-				{
-					case TIMESET_STATE :
-						switch( timesetphase )
-						{
-							case TIMESET_YEAR :
-								timesetphase = TIMESET_MONTH;
-								break;
-						
-							case TIMESET_MONTH :
-								timesetphase = TIMESET_DATE;
-								break;
-						
-							case TIMESET_DATE :
-								timesetphase = TIMESET_HOURS;
-								break;
-						
-							case TIMESET_HOURS :
-								timesetphase = TIMESET_MINUTES;
-								break;
-						
-							case TIMESET_MINUTES :
-								timesetphase = TIMESET_YEAR;
-								break;
-								
-							default :
-								break;
-						}
-						break;
-													
-					default :
-						break;
-				}
+				default :
+					runstate = NORMAL_STATE;
+					break;
 			}
-		} // end if( BUTTON_OK_PRESSED )
+		} // end if( menuButtonPressed )
+		
+		if( timeButtonPressed() )
+		{
+			switch( runstate )
+			{
+				case NORMAL_STATE :
+					runstate = TIMESET_STATE;
+					timesetphase = TIMESET_START;
+						
+					_delay_ms( 500 );
+						
+					// show time with hours blinking
+					timesetphase = TIMESET_YEAR;
+					break;
+						
+				default :
+					runstate = NORMAL_STATE;
+					break;
+			}
+		} // end if( timeButtonPressed )
+
+		if( okButtonPressed() )
+		{
+			switch( runstate )
+			{
+				case MENU_STATE :
+					switch( mainmenu )
+					{
+						case TEMP :
+							runstate = TEMPSET_STATE;
+							break;
+							
+						case TIME :
+							runstate = TIMESET_STATE;
+							timesetphase = TIMESET_START;
+						
+							_delay_ms( 500 );
+						
+							// show time with hours blinking
+							timesetphase = TIMESET_YEAR;
+							break;
+							
+						default:
+							break;
+					}
+					break;					
+
+				case TEMPSET_STATE :
+					runstate = MENU_STATE;
+					break;
+				
+				case TIMESET_STATE :
+					switch( timesetphase )
+					{
+						case TIMESET_YEAR :
+							timesetphase = TIMESET_MONTH;
+							break;
+						
+						case TIMESET_MONTH :
+							timesetphase = TIMESET_DATE;
+							break;
+						
+						case TIMESET_DATE :
+							timesetphase = TIMESET_HOURS;
+							break;
+						
+						case TIMESET_HOURS :
+							timesetphase = TIMESET_MINUTES;
+							break;
+						
+						case TIMESET_MINUTES :
+							timesetphase = TIMESET_YEAR;
+							break;
+								
+						default :
+							break;
+					}
+					break;
+													
+				default :
+					break;
+			}
+		} // end if( okButtonPressed )
 		
 		ROTARYBUTTON rotaryButton = readRotaryButton();
 
@@ -165,74 +157,24 @@ int main(void)
 		{
 			switch( runstate )
 			{
+				case NORMAL_STATE :
 				case MENU_STATE :
-					if( mainmenu < MAX_MENU_ITEMS )
-						mainmenu++;
-					else
+					mainmenu++;
+					if( mainmenu == LAST_ITEM )
 						mainmenu = 0;
 				break;
 						
 				case TIMESET_STATE :
-					switch( timesetphase )
-					{
-						case TIMESET_YEAR :
-							rtc.year++;
-							if( rtc.year == 9999 )
-								rtc.year = 2012;
-							break;
-						
-						case TIMESET_MONTH :
-							rtc.month++;
-							if( rtc.month == 13 )
-								rtc.month = 1;
-							break;
-						
-						case TIMESET_DATE :
-							rtc.date++;
-							if (rtc.date==32)
-							{
-								rtc.date=1;
-							}
-							else if (rtc.date==31) 
-							{                    
-								if ((rtc.month==4) || (rtc.month==6) || (rtc.month==9) || (rtc.month==11)) 
-								{
-									rtc.date=1;
-								}
-							}
-							else if (rtc.date==30)
-							{
-								if(rtc.month==2)
-								{
-									rtc.date=1;
-								}
-							}              
-							else if (rtc.date==29) 
-							{
-								if((rtc.month==2) && (is_not_leapyear()))
-								{
-									rtc.date=1;
-								}                
-							}                          
-							break;
-						
-						case TIMESET_HOURS :
-							rtc.hour++;
-							if( rtc.hour == 24 )
-								rtc.hour = 0;
-							break;
-						
-						case TIMESET_MINUTES :
-							rtc.minute++;
-							if( rtc.minute == 60 )
-								rtc.minute = 0;
-							break;
-								
-						default :
-							break;
-					}
+					increaseClock( timesetphase );
 					break;
 						
+				case TEMPSET_STATE :
+					if( targetTemp >= MAXTEMP )
+						targetTemp = 0;
+					else
+						targetTemp += 5;
+					break;
+				
 				default :
 					break;
 			}
@@ -242,69 +184,24 @@ int main(void)
 		{
 			switch( runstate )
 			{
+				case NORMAL_STATE :
 				case MENU_STATE :
-					if( mainmenu > 0 )
-						mainmenu--;
-					else
-						mainmenu = MAX_MENU_ITEMS;
+					if( mainmenu == 0 )
+						mainmenu = LAST_ITEM;
+					mainmenu--;
 				break;
 						
 				case TIMESET_STATE :
-					switch( timesetphase )
-					{
-						case TIMESET_YEAR :
-							if( rtc.year > 2012 )
-								rtc.year--;
-							break;
-						
-						case TIMESET_MONTH :
-							rtc.month--;
-							if( rtc.month == 0 )
-								rtc.month = 12;
-							break;
-						
-						case TIMESET_DATE :
-							rtc.date--;
-							if (rtc.date==0) 
-							{                    
-								if ((rtc.month==4) || (rtc.month==6) || (rtc.month==9) || (rtc.month==11)) 
-								{
-									rtc.date=30;
-								}
-								else if((rtc.month==2) && (is_not_leapyear()))
-								{
-									rtc.date=28;
-								}                
-								else if(rtc.month==2)
-								{
-									rtc.date=29;
-								}
-								else
-								{
-									rtc.date = 31;
-								}									
-							}                          
-							break;
-						
-						case TIMESET_HOURS :
-							if( rtc.hour == 0 )
-								rtc.hour = 23;
-							else
-								rtc.hour--;
-							break;
-						
-						case TIMESET_MINUTES :
-							if( rtc.minute == 0 )
-								rtc.minute = 59;
-							else
-								rtc.minute--;
-							break;
-								
-						default :
-							break;
-					}
+					decreaseClock( timesetphase );
 					break;
 						
+				case TEMPSET_STATE :
+					if( targetTemp == 0 )
+						targetTemp = MAXTEMP;
+					else
+						targetTemp -= 5;
+					break;
+				
 				default :
 					break;
 			}
@@ -320,17 +217,21 @@ int main(void)
 
 ISR(LCD_vect) 
 { 
-	if( bit_is_set( ADCSRA, ADSC ) )
-	{
+	Lcd_SymbolsOff();	
+	Lcd_DaysOff();
+	
+	if( ADC_CONVERSION_BUSY )
 		Lcd_Symbol( LOCK, 1 );
-	}
 	else
-	{
 		Lcd_Symbol( LOCK, 0 );
-	}				
 	
 	switch( runstate )
 	{
+		case TEMPSET_STATE :
+			Lcd_Symbol( ICE, 1 );
+			LCD_showTemp( targetTemp );
+			break;
+
 		case MENU_STATE :
 			switch( mainmenu )
 			{
@@ -348,8 +249,38 @@ ISR(LCD_vect)
 			}			
 			break;
 			
-		case PROBING_STATE :
+		case TIMESET_STATE :
+			LCD_showDay();
+			switch( timesetphase )
+			{
+				case TIMESET_YEAR :
+					LCD_blinkYears();
+					break;
 		
+				case TIMESET_MONTH :
+					LCD_blinkMonths();
+					break;
+		
+				case TIMESET_DATE :
+					LCD_blinkDate();
+					break;
+		
+				case TIMESET_HOURS :
+					LCD_blinkHours();
+					break;
+		
+				case TIMESET_MINUTES :
+					LCD_blinkMinutes();
+					break;
+					
+				case TIMESET_START :
+				default:
+					LCD_writeText( (unsigned char *)"TIME" );
+					break;
+			}			
+			break;
+			
+		case PROBING_STATE :
 			switch( probingphase )
 			{
 				case PROBING_UNKNOWN :
@@ -386,40 +317,25 @@ ISR(LCD_vect)
 			}
 			break;
 						
-		case TIMESET_STATE :
-		
-			switch( timesetphase )
+		default:
+			switch( mainmenu )
 			{
-				case TIMESET_YEAR :
-					LCD_blinkYears();
-					break;
-		
-				case TIMESET_MONTH :
-					LCD_blinkMonths();
-					break;
-		
-				case TIMESET_DATE :
-					LCD_blinkDate();
-					break;
-		
-				case TIMESET_HOURS :
-					LCD_blinkHours();
-					break;
-		
-				case TIMESET_MINUTES :
-					LCD_blinkMinutes();
+				case TEMP :
+					LCD_showTemp( adcTemp );
 					break;
 					
-				case TIMESET_START :
-				default:
-					LCD_writeText( (unsigned char *)"TIME" );
+				case TIME :
+					LCD_showDay();
+					LCD_showTime();
+					LCD_showSecondsBar();
 					break;
-			}			
-		
-		default:
-//			LCD_writeNum( adcValue );
-			LCD_showTemp( adcTemp );
-			break;
+					
+				default:
+					Lcd_Symbol(BAG, 1 );
+					LCD_writeNum( adcValue );
+					break;
+			}
+			break;			
 	}				
 }
 
@@ -482,6 +398,8 @@ ISR( ADC_vect )
 
 ISR(TIMER0_OVF_vect) 
 { 
+	LCD_tick();
+	
 	switch( runstate )
 	{
 		case NORMAL_STATE :

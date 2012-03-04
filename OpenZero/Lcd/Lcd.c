@@ -41,8 +41,15 @@ void LCD_tickertape( unsigned char *text, unsigned char len )
 	}	
 }	
 
+void LCD_tick( void )
+{
+	lcd_blinker++;
+}
+	
 void LCD_blinkYears( void )
 {
+	Lcd_Symbol( DOT, 0 );
+	Lcd_Symbol( COLON, 0 );
 	if( lcd_blinker % 2 )
 	{
 		Lcd_Map(0,' ');
@@ -61,6 +68,8 @@ void LCD_blinkYears( void )
 
 void LCD_blinkMonths( void )
 {
+	Lcd_Symbol( DOT, 1 );
+	Lcd_Symbol( COLON, 0 );
 	if( lcd_blinker % 2 )
 	{
 		Lcd_Map(0,' ');
@@ -77,6 +86,8 @@ void LCD_blinkMonths( void )
 	
 void LCD_blinkDate( void )
 {
+	Lcd_Symbol( DOT, 1 );
+	Lcd_Symbol( COLON, 0 );
 	Lcd_Map(0,'0'+(rtc.month/10)%10);
 	Lcd_Map(1,'0'+rtc.month%10);
 	if( lcd_blinker % 2 )
@@ -93,6 +104,8 @@ void LCD_blinkDate( void )
 	
 void LCD_blinkHours( void )
 {
+	Lcd_Symbol( DOT, 0 );
+	Lcd_Symbol( COLON, 1 );
 	if( lcd_blinker % 2 )
 	{
 		Lcd_Map(0,' ');
@@ -109,6 +122,8 @@ void LCD_blinkHours( void )
 	
 void LCD_blinkMinutes( void )
 {
+	Lcd_Symbol( DOT, 0 );
+	Lcd_Symbol( COLON, 1 );
 	Lcd_Map(0,'0'+(rtc.hour/10)%10);
 	Lcd_Map(1,'0'+rtc.hour%10);
 	if( lcd_blinker % 2 )
@@ -125,6 +140,12 @@ void LCD_blinkMinutes( void )
 	
 void LCD_showTemp( uint8_t temp )
 {
+	Lcd_Symbol( DOT, 1 );
+	Lcd_Symbol( COLON, 0 );
+	
+	// temperature is in 10 x degrees C
+	Lcd_Symbol( DOT, 1 );
+
 	if( temp>=100 )
 		Lcd_Map(0,'0'+(temp/100)%10);
 	else
@@ -135,21 +156,27 @@ void LCD_showTemp( uint8_t temp )
 		Lcd_Map(1,' ');
 	Lcd_Map(2,'0'+temp%10);
 	Lcd_Map(3,'.');
-	
-	// temperature is in 10 x degrees C
-	Lcd_Symbol( DOT, 1 );
 }
-	
+
+void LCD_showSecondsBar( void )
+{
+	Lcd_FillBar( 2 * rtc.second / 5 );
+}
+		
+void LCD_showDay( void )
+{
+	Lcd_Day( rtc.dow );
+}
+		
 void LCD_showTime( void )
 {
 	Lcd_Symbol( DOT, 0 );
 	Lcd_Symbol( COLON, 1 );
+	
 	Lcd_Map(0,'0'+(rtc.hour/10)%10);
 	Lcd_Map(1,'0'+rtc.hour%10);
 	Lcd_Map(2,'0'+(rtc.minute/10)%10);
 	Lcd_Map(3,'0'+rtc.minute%10);
-	
-	// or use itoa() function
 }
 	
 void LCD_writeText( unsigned char *text )

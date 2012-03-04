@@ -4,12 +4,6 @@
  * Created: 3-3-2012 18:11:20
  *  Author: Willem
  */ 
-#include <avr/io.h>
-#include <avr/interrupt.h>
-#include <util/delay.h>
-#include <avr/eeprom.h>
-#include <avr/sleep.h>
-
 #include "Controls.h"
 
 unsigned char previousRotaryState = 0;
@@ -26,7 +20,7 @@ void initControls( void )
 	PORTB |= (1<<PB6);				// PINB6 = "OK" button
 	PORTB |= (1<<PB7);				// PINB7 = "-" button on wheel
 	
-// Why can I not get PCINT1_vecto to work???
+// Why can I not get PCINT1_vector to work???
 //	EIMSK |= (1<<PCIE1);				// Enable interrupt-on-change interrupts for PCINT8-PCINT15 which includes the push buttons
 //	PCMSK1 |= (1<<PCINT8)|(1<<PCINT12)|(1<<PCINT13)|(1<<PCINT14)|(1<<PCINT15);
 	
@@ -41,7 +35,7 @@ ROTARYBUTTON readRotaryButton( void )
 	if( rotaryState != previousRotaryState )
 	{
 		_delay_ms( DEBOUNCE_TIME );
-		if( rotaryState == (BUTTON_UP_PRESSED<<1)|BUTTON_DOWN_PRESSED )
+		if( rotaryState == ((BUTTON_UP_PRESSED<<1)|BUTTON_DOWN_PRESSED) )
 		{
 			switch( (previousRotaryState<<2)|rotaryState )
 			{
@@ -66,6 +60,66 @@ ROTARYBUTTON readRotaryButton( void )
 		}			
 	}	
 	
-	return ROTARY_STILL;		
+	return ROTARY_UNKNOWN;		
+}
+
+unsigned char menuButtonPressed( void )
+{
+	if( BUTTON_MENU_PRESSED )
+	{
+		_delay_ms( DEBOUNCE_TIME );
+			
+		// poll again after a debounce period
+		if( BUTTON_MENU_PRESSED )
+		{
+			// wait until button is released
+			while( BUTTON_MENU_PRESSED ) ;						
+			// continue here if button is still depressed
+				
+			return 1;
+		}			
+	} // end if( BUTTON_MENU_PRESSED )
+	
+	return 0;
+}
+
+unsigned char timeButtonPressed( void )
+{
+	if( BUTTON_TIME_PRESSED )
+	{
+		_delay_ms( DEBOUNCE_TIME );
+			
+		// poll again after a debounce period
+		if( BUTTON_TIME_PRESSED )
+		{
+			// wait until button is released
+			while( BUTTON_TIME_PRESSED ) ;						
+			// continue here if button is still depressed
+				
+			return 1;
+		}			
+	} // end if( BUTTON_TIME_PRESSED )
+	
+	return 0;
+}
+
+unsigned char okButtonPressed( void )
+{
+	if( BUTTON_OK_PRESSED )
+	{
+		_delay_ms( DEBOUNCE_TIME );
+			
+		// poll again after a debounce period
+		if( BUTTON_OK_PRESSED )
+		{
+			// wait until button is released
+			while( BUTTON_OK_PRESSED ) ;						
+			// continue here if button is still depressed
+				
+			return 1;
+		}			
+	} // end if( BUTTON_OK_PRESSED )
+	
+	return 0;
 }
 

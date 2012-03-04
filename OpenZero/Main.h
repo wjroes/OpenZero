@@ -5,22 +5,15 @@
 	#define F_CPU					1000000UL
 #endif
 
-typedef enum 
-{
+typedef enum {
 	NORMAL_STATE,
 	MENU_STATE,
 	PROBING_STATE,
 	TIMESET_STATE,
+	TEMPSET_STATE
 } RUNSTATE;
 	
-typedef enum 
-{
-	TEMP,
-	TIME
-} MAINMENU;
-
-typedef enum 
-{
+typedef enum {
 	TIMESET_UNKNOWN,
 	TIMESET_START,
 	TIMESET_HOURS,
@@ -31,8 +24,7 @@ typedef enum
 	TIMESET_END
 } TIMESETPHASE;
 
-typedef enum 
-{
+typedef enum {
 	PROBING_UNKNOWN,
 	PROBING_START,
 	PROBING_RUNNING_CCW,
@@ -45,7 +37,5 @@ typedef enum
 extern volatile RUNSTATE runstate;	
 extern volatile TIMESETPHASE timesetphase;
 extern volatile PROBINGPHASE probingphase;
-extern volatile MAINMENU mainmenu;
-
 
 #endif

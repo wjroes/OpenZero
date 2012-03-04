@@ -5,8 +5,6 @@
  *  Author: Willem
  */ 
 
-#include <avr/io.h>
-
 #include "ZeroLcd.h"
 
 int lcdmap[] = 
@@ -82,6 +80,54 @@ int barmap[24][2] =
 	{11,0},{6,0},{1,0},{1,1},{6,1},{11,1},{11,2},{6,2},{1,2},{1,3},{6,3},{11,3},{11,4},{6,4},{1,4},{1,5},{6,5},{11,5},{16,6},{11,6},{6,6},{1,6},{1,7},{6,7} // BAR1-BAR24
 };
 	
+int daymap[7][2] =
+{
+	{16,0},{16,1},{16,2},{16,3},{16,4},{16,5},{11,7}
+};
+	
+void Lcd_Day( unsigned char dayofweek )
+{
+	for( unsigned char i = 0; i<7; i++ )
+	{
+		if( daymap[i][0] == 11 )
+		{
+			if( dayofweek == i )
+				LCDDR11|=(1<<daymap[i][1]);
+			else
+				LCDDR11&=~(1<<daymap[i][1]);
+		}
+		else
+		{
+			if( dayofweek == i )
+				LCDDR16|=(1<<daymap[i][1]);
+			else
+				LCDDR16&=~(1<<daymap[i][1]);
+		}		
+	}		
+}
+	
+void Lcd_DaysOn( void )
+{
+	for( unsigned char i = 0; i<7; i++ )
+	{
+		if( daymap[i][0] == 11 )
+			LCDDR11|=(1<<daymap[i][1]);
+		else
+			LCDDR16|=(1<<daymap[i][1]);
+	}		
+}	
+
+void Lcd_DaysOff( void )
+{
+	for( unsigned char i = 0; i<7; i++ )
+	{
+		if( daymap[i][0] == 11 )
+			LCDDR11&=~(1<<daymap[i][1]);
+		else
+			LCDDR16&=~(1<<daymap[i][1]);
+	}		
+}	
+
 void Lcd_Bar( unsigned char index, unsigned char on )
 {
 	// index is 0 based position
@@ -103,11 +149,17 @@ void Lcd_Bar( unsigned char index, unsigned char on )
 			else
 				LCDDR6&=~segment_bits;
 			break;
-		case 2:
+		case 11:
 			if( on )
 				LCDDR11|=segment_bits;
 			else
 				LCDDR11&=~segment_bits;
+			break;
+		case 16:
+			if( on )
+				LCDDR16|=segment_bits;
+			else
+				LCDDR16&=~segment_bits;
 			break;
 		default :
 			break;
@@ -115,6 +167,14 @@ void Lcd_Bar( unsigned char index, unsigned char on )
 		
 }	
 
+void Lcd_FillBar( unsigned char index )
+{
+	for( unsigned char i = 0; i<MAXBARS; i++ )
+	{
+		Lcd_Bar( i, (i<=index) );
+	}	
+}
+	
 void Lcd_Symbol( LCDSYMBOL symbol, unsigned char on )
 {
 	switch( symbol )
@@ -202,6 +262,14 @@ void Lcd_Symbol( LCDSYMBOL symbol, unsigned char on )
 	}	
 }	
 
+void Lcd_SymbolsOff( void )
+{
+	for( unsigned char i = 0; i<MAXSYMBOLS; i++ )
+	{
+		Lcd_Symbol( i, 0 );
+	}		
+}
+	
 void Lcd_Map(unsigned char position, unsigned char character)
 {
 	unsigned char lcd_register;
