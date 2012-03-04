@@ -12,9 +12,9 @@
 #include "ZeroLcd.h"
 #include "../Time/Rtc.h"
 
-volatile uint16_t ticker = 0;
+volatile uint16_t lcd_blinker = 0;
 
-void LCD_Init(void)
+void initLCD(void)
 {
 	/* Use 32 kHz crystal oscillator */
 	/* 1/3 Bias and 1/4 duty, SEG0:SEG24 is used as port pins, COM0:COM3 as common pins */
@@ -26,11 +26,6 @@ void LCD_Init(void)
 	LCDCCR = (1<<LCDDC1) | (1<<LCDCC3) | (1<<LCDCC2) | (1<<LCDCC1);
 	/* Enable LCD, default waveform and interrupt enabled */
 	LCDCRA = (1<<LCDEN) | (1<<LCDIE);
-
-	// timer0 
-	TCCR0A = (1<<CS02)|(1<<CS00);	// timer clock = system clock / 1024
-	TIFR0 = (1<<TOV0);				// clear pending interrupts
-	TIMSK0 = (1<<TOIE0);			// enable timer0 overflow Interrupt
 }
 
 void LCD_tickertape( unsigned char *text, unsigned char len )
@@ -48,7 +43,7 @@ void LCD_tickertape( unsigned char *text, unsigned char len )
 
 void LCD_blinkYears( void )
 {
-	if( ticker % 2 )
+	if( lcd_blinker % 2 )
 	{
 		Lcd_Map(0,' ');
 		Lcd_Map(1,' ');
@@ -66,7 +61,7 @@ void LCD_blinkYears( void )
 
 void LCD_blinkMonths( void )
 {
-	if( ticker % 2 )
+	if( lcd_blinker % 2 )
 	{
 		Lcd_Map(0,' ');
 		Lcd_Map(1,' ');
@@ -84,7 +79,7 @@ void LCD_blinkDate( void )
 {
 	Lcd_Map(0,'0'+(rtc.month/10)%10);
 	Lcd_Map(1,'0'+rtc.month%10);
-	if( ticker % 2 )
+	if( lcd_blinker % 2 )
 	{
 		Lcd_Map(2,' ');
 		Lcd_Map(3,' ');
@@ -98,7 +93,7 @@ void LCD_blinkDate( void )
 	
 void LCD_blinkHours( void )
 {
-	if( ticker % 2 )
+	if( lcd_blinker % 2 )
 	{
 		Lcd_Map(0,' ');
 		Lcd_Map(1,' ');
@@ -116,7 +111,7 @@ void LCD_blinkMinutes( void )
 {
 	Lcd_Map(0,'0'+(rtc.hour/10)%10);
 	Lcd_Map(1,'0'+rtc.hour%10);
-	if( ticker % 2 )
+	if( lcd_blinker % 2 )
 	{
 		Lcd_Map(2,' ');
 		Lcd_Map(3,' ');
@@ -141,11 +136,14 @@ void LCD_showTemp( uint8_t temp )
 	Lcd_Map(2,'0'+temp%10);
 	Lcd_Map(3,'.');
 	
-	// or use itoa() function
+	// temperature is in 10 x degrees C
+	Lcd_Symbol( DOT, 1 );
 }
 	
 void LCD_showTime( void )
 {
+	Lcd_Symbol( DOT, 0 );
+	Lcd_Symbol( COLON, 1 );
 	Lcd_Map(0,'0'+(rtc.hour/10)%10);
 	Lcd_Map(1,'0'+rtc.hour%10);
 	Lcd_Map(2,'0'+(rtc.minute/10)%10);
@@ -156,6 +154,8 @@ void LCD_showTime( void )
 	
 void LCD_writeText( unsigned char *text )
 {
+	Lcd_Symbol( DOT, 0 );
+	Lcd_Symbol( COLON, 0 );
 	for( int i = 0; i<LCD_MAX_CHARS; i++ )
 	{
 		Lcd_Map(i,*(text+i));
@@ -164,6 +164,8 @@ void LCD_writeText( unsigned char *text )
 
 void LCD_writeNum( uint16_t num )
 {
+	Lcd_Symbol( DOT, 0 );
+	Lcd_Symbol( COLON, 0 );
 	if( num>=1000 )
 		Lcd_Map(0,'0'+(num/1000)%10);
 	else

@@ -59,14 +59,14 @@
   <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
     <ToolchainSettings>
       <AvrGcc>
-        <avrgcc.compiler.general.ChangeDefaultCharTypeUnsigned>True</avrgcc.compiler.general.ChangeDefaultCharTypeUnsigned>
-        <avrgcc.compiler.general.ChangeDefaultBitFieldUnsigned>True</avrgcc.compiler.general.ChangeDefaultBitFieldUnsigned>
-        <avrgcc.compiler.optimization.PackStructureMembers>True</avrgcc.compiler.optimization.PackStructureMembers>
-        <avrgcc.compiler.optimization.AllocateBytesNeededForEnum>True</avrgcc.compiler.optimization.AllocateBytesNeededForEnum>
-        <avrgcc.compiler.optimization.DebugLevel>Maximum (-g3)</avrgcc.compiler.optimization.DebugLevel>
-        <avrgcc.compiler.warnings.AllWarnings>True</avrgcc.compiler.warnings.AllWarnings>
-        <avrgcc.assembler.debugging.DebugLevel>Default (-g2)</avrgcc.assembler.debugging.DebugLevel>
-      </AvrGcc>
+  <avrgcc.compiler.general.ChangeDefaultCharTypeUnsigned>True</avrgcc.compiler.general.ChangeDefaultCharTypeUnsigned>
+  <avrgcc.compiler.general.ChangeDefaultBitFieldUnsigned>True</avrgcc.compiler.general.ChangeDefaultBitFieldUnsigned>
+  <avrgcc.compiler.optimization.PackStructureMembers>True</avrgcc.compiler.optimization.PackStructureMembers>
+  <avrgcc.compiler.optimization.AllocateBytesNeededForEnum>True</avrgcc.compiler.optimization.AllocateBytesNeededForEnum>
+  <avrgcc.compiler.optimization.DebugLevel>Default (-g2)</avrgcc.compiler.optimization.DebugLevel>
+  <avrgcc.compiler.warnings.AllWarnings>True</avrgcc.compiler.warnings.AllWarnings>
+  <avrgcc.assembler.debugging.DebugLevel>Default (-Wa,-g2)</avrgcc.assembler.debugging.DebugLevel>
+</AvrGcc>
     </ToolchainSettings>
     <MemorySettings>
       <MemorySegments>
@@ -77,11 +77,17 @@
     </MemorySettings>
     <GenerateHexFile>True</GenerateHexFile>
     <GenerateMapFile>False</GenerateMapFile>
-    <GenerateListFile>False</GenerateListFile>
+    <GenerateListFile>True</GenerateListFile>
     <GenerateEepFile>False</GenerateEepFile>
     <PostBuildEvent>avrdude -c usbasp -p m169 -U flash:w:$(OutputDirectory)\$(SolutionName).hex:i</PostBuildEvent>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="Controls\Controls.c">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="Controls\Controls.h">
+      <SubType>compile</SubType>
+    </Compile>
     <Compile Include="Lcd\Lcd.c">
       <SubType>compile</SubType>
     </Compile>
@@ -97,12 +103,26 @@
     <Compile Include="Main.c">
       <SubType>compile</SubType>
     </Compile>
+    <Compile Include="Temperature\Temp.c">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="Temperature\Temp.h">
+      <SubType>compile</SubType>
+    </Compile>
     <Compile Include="Time\Rtc.c">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="Time\Rtc.h">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="Valve\Valve.c">
       <SubType>compile</SubType>
     </Compile>
   </ItemGroup>
   <ItemGroup>
     <Folder Include="Lcd" />
+    <Folder Include="Controls" />
+    <Folder Include="Valve" />
     <Folder Include="Temperature" />
     <Folder Include="Time" />
   </ItemGroup>

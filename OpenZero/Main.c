@@ -4,73 +4,23 @@
  * Created: 15-2-2012 21:16:33
  *  Author: Willem
  */ 
-#define F_CPU					1000000UL
-
-#define DEBOUNCE_TIME			50			// msec
-
-#define ADC_THRESHOLD_CLOSE		965			// adc value cut off point while closing
-#define ADC_THRESHOLD_OPEN		965			// adc value cut off point while opening
-
-#define BUTTON_TIME_PRESSED		bit_is_clear( PINB, PINB5 )
-#define BUTTON_MENU_PRESSED		bit_is_clear( PINB, PINB4 )
-#define BUTTON_OK_PRESSED		bit_is_clear( PINB, PINB6 )
-#define BUTTON_UP_PRESSED		bit_is_clear( PINB, PINB0 )
-#define BUTTON_DOWN_PRESSED		bit_is_clear( PINB, PINB7 )
-
-#define RUN_MOTOR_CW			PORTE |= (1<<PINE7)&~(1<<PINE6)
-#define RUN_MOTOR_CCW			PORTE |= (1<<PINE6)&~(1<<PINE7)
-#define STOP_MOTOR				PORTE &= ~((1<<PINE6)|(1<<PINE7))
-
-#define NTC_SENSOR_ON			PORTF |= (1<<PINF3)
-#define NTC_SENSOR_OFF			PORTF &= ~(1<<PINF3)
-
-#define OPTO_SENSOR_ON			PORTE |= (1<<PINE2);
-#define OPTO_SENSOR_OFF			PORTE &= ~(1<<PINE2);
-
 #include <avr/io.h>
 #include <avr/interrupt.h>
 #include <util/delay.h>
 #include <avr/eeprom.h>
 #include <avr/sleep.h>
 
+#include "Main.h"
 #include "Time/Rtc.h"
 #include "Lcd/Lcd.h"
 #include "Lcd/ZeroLcd.h"
-
-typedef enum 
-{
-	NORMAL_STATE,
-	MENU_STATE,
-	PROBING_STATE,
-	TIMESET_STATE,
-} RUNSTATE;
-	
-typedef enum 
-{
-	TIMESET_UNKNOWN,
-	TIMESET_START,
-	TIMESET_HOURS,
-	TIMESET_MINUTES,
-	TIMESET_DATE,
-	TIMESET_MONTH,
-	TIMESET_YEAR,
-	TIMESET_END
-} TIMESETPHASE;
-
-typedef enum 
-{
-	PROBING_UNKNOWN,
-	PROBING_START,
-	PROBING_RUNNING_CCW,
-	PROBING_END_CCW,
-	PROBING_RUNNING_CW,
-	PROBING_END_CW,
-	PROBING_END
-} PROBINGPHASE;
+#include "Temperature/Temp.h"
+#include "Controls/Controls.h"
 
 volatile RUNSTATE runstate = NORMAL_STATE;	
 volatile TIMESETPHASE timesetphase = TIMESET_UNKNOWN;
 volatile PROBINGPHASE probingphase = PROBING_UNKNOWN;
+volatile MAINMENU mainmenu = TEMP;
 
 volatile unsigned int adcValue = 0;						// in V x 1000
 volatile unsigned int adcVref = 3000;					// in V x 1000
@@ -78,150 +28,27 @@ volatile unsigned int adcTemp = 0;
 
 volatile unsigned int revCounter = 0;
 
-unsigned char findNTCTemp( unsigned int r )
-{
-	// finds the best matching item in a sorted array and returns the index in the array using binary search
-	unsigned int ntcTable[50] = {335,317,301,285,270,256,243,231,219,208,198,188,179,170,162,154,146,139,133,126,120,115,109,104,100,95,91,86,82,79,75,72,68,65,62,60,57,55,52,50,48,46,44,42,40,39,37,35,34,33}; // NTC R values in k Ohm from 0 to 49 in steps of 1 degree
- 	unsigned char low = 0;
-	unsigned char mid;
-    unsigned char high = (sizeof ntcTable) - 1;	
+volatile unsigned char menuItem = 0;
 
- 	while (low < high) 
-	{
-		mid = (high + low)>>1;
+volatile unsigned char *lcd_text = "    ";
 
-		if (ntcTable[mid]>r)
-	    	low = mid + 1; 
-		else
-			high = mid; 
-	}
-
-	if (ntcTable[mid] == r)
-		return mid;
-	else
-		return high+1; 
-}
-
-void doProbe( void )
-{
-	runstate = PROBING_STATE;
-	
-	ADMUX |= (1<<REFS0)|(1<<MUX1);					// ref. voltage = AVcc, channel = ADC2
-	ADCSRA |= (1<<ADPS2)|(1<<ADIE);					// 1:16 prescaler
-	
-	_delay_ms( 300 );
-	
-	ADCSRA |= (1<<ADEN);							// enable ADC
-	ADCSRA |= (1<<ADSC);							// start first conversion
-	
-	probingphase = PROBING_START;
-	
-	// take some time to take a measurement without the motor running, go to sleep and wake up if the measurements are done
-	set_sleep_mode( SLEEP_MODE_ADC );
-	sleep_mode();
-	
-	probingphase = PROBING_RUNNING_CCW;
-	RUN_MOTOR_CCW;
-	while( probingphase == PROBING_RUNNING_CCW ) ;
-
-	STOP_MOTOR;
-	
-	while( probingphase == PROBING_END_CCW) 
-	{
-		if( BUTTON_OK_PRESSED )
-		{
-			_delay_ms( DEBOUNCE_TIME );
-			
-			// poll again after a debounce period
-			if( BUTTON_OK_PRESSED )
-			{
-				// wait until button is released
-				while( BUTTON_OK_PRESSED ) ;						
-				// continue here if button is still depressed
-				
-				probingphase = PROBING_RUNNING_CW;
-			}
-		}
-	}		
-	
-	RUN_MOTOR_CW;
-	while( probingphase == PROBING_RUNNING_CW ) ;
-	
-	STOP_MOTOR;
-	
-	while( probingphase == PROBING_END_CW )
-	{
-		if( BUTTON_OK_PRESSED )
-		{
-			_delay_ms( DEBOUNCE_TIME );
-			
-			// poll again after a debounce period
-			if( BUTTON_OK_PRESSED )
-			{
-				// wait until button is released
-				while( BUTTON_OK_PRESSED ) ;						
-				// continue here if button is still depressed
-				
-				probingphase = PROBING_RUNNING_CCW;
-			}
-		}
-	}	
-	
-	RUN_MOTOR_CCW;
-	while( probingphase == PROBING_RUNNING_CCW ) ;
-
-	STOP_MOTOR;
-	
-	probingphase = PROBING_END;
-
-	ADCSRA &= ~((1<<ADEN)|(1<<ADIE));					// disable ADC
-	
-	_delay_ms( 300 );
-
-	runstate = NORMAL_STATE;
-}	
-
-void doTemp( void )
-{
-	NTC_SENSOR_ON;
-	
-	ADMUX |= (1<<REFS0)|(1<<MUX0);					// ref. voltage = AVcc, channel = ADC1
-	ADCSRA |= (1<<ADPS2)|(1<<ADPS2)|(1<<ADPS2);		// 1:128 prescaler
-	ADCSRA |= (1<<ADEN)|(1<<ADIE);					// enable ADC
-	ADCSRA |= (1<<ADSC);							// start first conversion
-}
-	
 int main(void)
 {
-	PORTB |= (1<<PINB3);			// PINB3 = "+" button on wheel, setting PINB3 to 1 enables the internal pull-up
-	PORTB |= (1<<PINB2);			// PINB3 = "+" button on wheel, setting PINB3 to 1 enables the internal pull-up
-	PORTB |= (1<<PINB1);			// PINB3 = "+" button on wheel, setting PINB3 to 1 enables the internal pull-up
+	initLCD();
+	initRTC();
+	initControls();
 	
-	// all pins are input by default, so there's no need to set the direction
-	PORTB |= (1<<PINB0);			// PINB3 = "+" button on wheel, setting PINB3 to 1 enables the internal pull-up
-	PORTB |= (1<<PINB4);			// PINB4 = "TIME" button
-	PORTB |= (1<<PINB5);			// PINB5 = "MENU" button
-	PORTB |= (1<<PINB6);			// PINB6 = "OK" button
-	PORTB |= (1<<PINB7);			// PINB7 = "-" button on wheel
-	
-	DDRE  = (1<<PINE6)|(1<<PINE7);	// Pin E6 / Pin E7 provide power to the motor and are both outputs
-	DDRE |= (1<<PINE2);				// Pin E2 provides power to the opto-sensor and is output
-	DDRF  = (1<<PINF3);				// Pin F3 providers power to the NTC and is output
-	
-//	EIMSK |= (1<<PCIE1)|(1<<PCIE0);	// Enable interrupt-on-change interrupts for PCINT8-PCINT15 which includes the push buttons
-//	PCMSK0 |= (1<<PCINT1);
-//	PCMSK1 |= (1<<PCINT8)|(1<<PCINT12)|(1<<PCINT13)|(1<<PCINT14)|(1<<PCINT15);
-	
-	LCD_Init();
-	
-	Rtc_init();
+	// timer0 
+	TCCR0A = (1<<CS02)|(1<<CS00);	// timer clock = system clock / 1024
+	TIFR0 = (1<<TOV0);				// clear pending interrupts
+	TIMSK0 = (1<<TOIE0);			// enable timer0 overflow Interrupt
 	
 	sei();							// Enable Global Interrupts
 	
-	// start a probe run to find the "full open" and "full close" positions
+	// start a probe run to find the "fully open" and "fully closed" positions
 //	doProbe();
 
-	doTemp();
+	initTemp();
 	
 	runstate = NORMAL_STATE;
 	
@@ -332,160 +159,161 @@ int main(void)
 			}
 		} // end if( BUTTON_OK_PRESSED )
 		
-		if( BUTTON_UP_PRESSED )
+		ROTARYBUTTON rotaryButton = readRotaryButton();
+
+		if( rotaryButton == ROTARY_UP )
 		{
-			// poll again after a debounce period
-			if( BUTTON_UP_PRESSED )
+			switch( runstate )
 			{
-				// wait until button is released
-				while( BUTTON_UP_PRESSED ) ;						
-				// continue here if button is still depressed
-				
-				switch( runstate )
-				{
-					case TIMESET_STATE :
-						switch( timesetphase )
-						{
-							case TIMESET_YEAR :
-								rtc.year++;
-								if( rtc.year == 9999 )
-									rtc.year = 2012;
-								break;
+				case MENU_STATE :
+					if( mainmenu < MAX_MENU_ITEMS )
+						mainmenu++;
+					else
+						mainmenu = 0;
+				break;
 						
-							case TIMESET_MONTH :
-								rtc.month++;
-								if( rtc.month == 13 )
-									rtc.month = 1;
-								break;
+				case TIMESET_STATE :
+					switch( timesetphase )
+					{
+						case TIMESET_YEAR :
+							rtc.year++;
+							if( rtc.year == 9999 )
+								rtc.year = 2012;
+							break;
 						
-							case TIMESET_DATE :
-								rtc.date++;
-								if (rtc.date==32)
+						case TIMESET_MONTH :
+							rtc.month++;
+							if( rtc.month == 13 )
+								rtc.month = 1;
+							break;
+						
+						case TIMESET_DATE :
+							rtc.date++;
+							if (rtc.date==32)
+							{
+								rtc.date=1;
+							}
+							else if (rtc.date==31) 
+							{                    
+								if ((rtc.month==4) || (rtc.month==6) || (rtc.month==9) || (rtc.month==11)) 
 								{
 									rtc.date=1;
 								}
-								else if (rtc.date==31) 
-								{                    
-									if ((rtc.month==4) || (rtc.month==6) || (rtc.month==9) || (rtc.month==11)) 
-									{
-										rtc.date=1;
-									}
+							}
+							else if (rtc.date==30)
+							{
+								if(rtc.month==2)
+								{
+									rtc.date=1;
 								}
-								else if (rtc.date==30)
+							}              
+							else if (rtc.date==29) 
+							{
+								if((rtc.month==2) && (is_not_leapyear()))
 								{
-									if(rtc.month==2)
-									{
-									   rtc.date=1;
-									}
-								}              
-								else if (rtc.date==29) 
-								{
-									if((rtc.month==2) && (is_not_leapyear()))
-									{
-										rtc.date=1;
-									}                
-								}                          
-								break;
+									rtc.date=1;
+								}                
+							}                          
+							break;
 						
-							case TIMESET_HOURS :
-								rtc.hour++;
-								if( rtc.hour == 24 )
-									rtc.hour = 0;
-								break;
+						case TIMESET_HOURS :
+							rtc.hour++;
+							if( rtc.hour == 24 )
+								rtc.hour = 0;
+							break;
 						
-							case TIMESET_MINUTES :
-								rtc.minute++;
-								if( rtc.minute == 60 )
-									rtc.minute = 0;
-								break;
+						case TIMESET_MINUTES :
+							rtc.minute++;
+							if( rtc.minute == 60 )
+								rtc.minute = 0;
+							break;
 								
-							default :
-								break;
-						}
-						break;
+						default :
+							break;
+					}
+					break;
 						
-					default :
-						break;
-				}
+				default :
+					break;
 			}
 		} // end if( BUTTON_UP_PRESSED )
 
-		if( BUTTON_DOWN_PRESSED )
+		if( rotaryButton == ROTARY_DOWN )
 		{
-			// poll again after a debounce period
-			if( BUTTON_DOWN_PRESSED )
+			switch( runstate )
 			{
-				// wait until button is released
-				while( BUTTON_DOWN_PRESSED ) ;						
-				// continue here if button is still depressed
-				
-				switch( runstate )
-				{
-					case TIMESET_STATE :
-						switch( timesetphase )
-						{
-							case TIMESET_YEAR :
-								if( rtc.year > 2012 )
-									rtc.year--;
-								break;
+				case MENU_STATE :
+					if( mainmenu > 0 )
+						mainmenu--;
+					else
+						mainmenu = MAX_MENU_ITEMS;
+				break;
 						
-							case TIMESET_MONTH :
-								rtc.month--;
-								if( rtc.month == 0 )
-									rtc.month = 12;
-								break;
+				case TIMESET_STATE :
+					switch( timesetphase )
+					{
+						case TIMESET_YEAR :
+							if( rtc.year > 2012 )
+								rtc.year--;
+							break;
 						
-							case TIMESET_DATE :
-								rtc.date--;
-								if (rtc.date==0) 
-								{                    
-									if ((rtc.month==4) || (rtc.month==6) || (rtc.month==9) || (rtc.month==11)) 
-									{
-										rtc.date=30;
-									}
-									else if((rtc.month==2) && (is_not_leapyear()))
-									{
-										rtc.date=28;
-									}                
-									else if(rtc.month==2)
-									{
-									   rtc.date=29;
-									}
-									else
-									{
-										rtc.date = 31;
-									}									
-								}                          
-								break;
+						case TIMESET_MONTH :
+							rtc.month--;
+							if( rtc.month == 0 )
+								rtc.month = 12;
+							break;
 						
-							case TIMESET_HOURS :
-								if( rtc.hour == 0 )
-									rtc.hour = 23;
+						case TIMESET_DATE :
+							rtc.date--;
+							if (rtc.date==0) 
+							{                    
+								if ((rtc.month==4) || (rtc.month==6) || (rtc.month==9) || (rtc.month==11)) 
+								{
+									rtc.date=30;
+								}
+								else if((rtc.month==2) && (is_not_leapyear()))
+								{
+									rtc.date=28;
+								}                
+								else if(rtc.month==2)
+								{
+									rtc.date=29;
+								}
 								else
-									rtc.hour--;
-								break;
+								{
+									rtc.date = 31;
+								}									
+							}                          
+							break;
 						
-							case TIMESET_MINUTES :
-								if( rtc.minute == 0 )
-									rtc.minute = 59;
-								else
-									rtc.minute--;
-								break;
+						case TIMESET_HOURS :
+							if( rtc.hour == 0 )
+								rtc.hour = 23;
+							else
+								rtc.hour--;
+							break;
+						
+						case TIMESET_MINUTES :
+							if( rtc.minute == 0 )
+								rtc.minute = 59;
+							else
+								rtc.minute--;
+							break;
 								
-							default :
-								break;
-						}
-						break;
+						default :
+							break;
+					}
+					break;
 						
-					default :
-						break;
-				}
+				default :
+					break;
 			}
 		} // end if( BUTTON_DOWN_PRESSED )
 
 		// go to sleep but wake up if any button is pressed
-//		set_sleep_mode( SLEEP_MODE_ADC );
-//		sleep_mode();
+		set_sleep_mode( SLEEP_MODE_ADC );
+		sleep_mode();
+
 	} // end while forever
 
 }
@@ -504,7 +332,20 @@ ISR(LCD_vect)
 	switch( runstate )
 	{
 		case MENU_STATE :
-			LCD_writeText((unsigned char *)"MENU");
+			switch( mainmenu )
+			{
+				case TEMP :
+				LCD_writeText((unsigned char *)"TEMP");
+				break;
+				
+				case TIME :
+				LCD_writeText((unsigned char *)"TIME");
+				break;
+				
+				default :
+				LCD_writeText((unsigned char *)"MENU");
+				break;
+			}			
 			break;
 			
 		case PROBING_STATE :
@@ -549,10 +390,6 @@ ISR(LCD_vect)
 		
 			switch( timesetphase )
 			{
-				case TIMESET_START :
-					LCD_writeText( (unsigned char *)"TIME" );
-					break;
-		
 				case TIMESET_YEAR :
 					LCD_blinkYears();
 					break;
@@ -573,11 +410,14 @@ ISR(LCD_vect)
 					LCD_blinkMinutes();
 					break;
 					
+				case TIMESET_START :
 				default:
+					LCD_writeText( (unsigned char *)"TIME" );
 					break;
 			}			
 		
 		default:
+//			LCD_writeNum( adcValue );
 			LCD_showTemp( adcTemp );
 			break;
 	}				
@@ -593,16 +433,14 @@ ISR( ADC_vect )
 	switch( runstate )
 	{
 		case NORMAL_STATE :
-			// Rt = 120k / ( 1024 / adc - 1.0 )
-			temp = 1024000;
-			temp /= adcValue;
-			temp -= 1000;
-			temp = 120000 / temp;	// in k Ohms, this is the calculated R of the NTC based on Vcc
+			// Rt = 120k * adc / (1024 - adc )
+			temp = 120 * adcValue;
+			temp /= (1024 - adcValue );			// in k Ohms, this is the calculated R of the NTC based on Vcc
 			
 			adcTemp = findNTCTemp( (unsigned int)temp );
 
-			NTC_SENSOR_OFF;
 			ADCSRA &= ~(1<<ADEN)|(1<<ADIE);		// disable ADC
+			NTC_SENSOR_OFF;
 		
 			break;
 			
@@ -644,14 +482,21 @@ ISR( ADC_vect )
 
 ISR(TIMER0_OVF_vect) 
 { 
-	ticker++;
-	
-	// if we're not doing an ADC conversion already
-	if( bit_is_clear( PINF, PINF3 ) )
+	switch( runstate )
 	{
-		NTC_SENSOR_ON;
-		ADCSRA |= (1<<ADSC);							// start conversion
-	}
+		case NORMAL_STATE :
+			// if NTC sensor is off
+			// start a temp check
+			if( bit_is_clear( PINF, PF3 ) )
+			{
+				NTC_SENSOR_ON;
+				ADCSRA |= (1<<ADSC);							// start conversion
+			}
+			break;
+			
+		default:
+			break;
+	}	
 }
 
 ISR( PCINT0_vect )
@@ -663,3 +508,4 @@ ISR( PCINT0_vect )
 ISR( PCINT1_vect )
 {
 }	
+

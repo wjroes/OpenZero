@@ -15,6 +15,9 @@
  * minute, and the 8th LED represents the hour.
  *
  ******************************************************************************************/ 
+#ifndef F_CPU
+	#define F_CPU		1000000UL
+#endif
 
 #include <avr/io.h>
 #include <avr/interrupt.h>
@@ -32,7 +35,7 @@ uint16_t EEMEM	EE_years;
 
 volatile time rtc;
 
-void Rtc_init(void)  
+void initRTC(void)  
 {                                
 	rtc.second = 0;
 	rtc.minute = (unsigned int)eeprom_read_byte(&EE_minutes);

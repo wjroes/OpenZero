@@ -3,9 +3,10 @@
 
 #define LCD_MAX_CHARS	4
 
-extern volatile uint16_t ticker;
+extern volatile uint16_t lcd_blinker;
 
-void LCD_Init(void);
+void initLCD(void);
+
 void LCD_blinkYears( void );
 void LCD_blinkMonths( void );
 void LCD_blinkDate( void );
