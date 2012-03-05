@@ -40,7 +40,9 @@ int main(void)
 	initLCD();
 	initValve();
 
-	// timer0 
+	// timer0 is being used as a global 'heartbeat'
+	// i.e. for blinking in the LCD
+	// and for running a temperature check at regular intervals
 	TCCR0A = (1<<CS02)|(1<<CS00);	// timer clock = system clock / 1024
 	TIFR0 = (1<<TOV0);				// clear pending interrupts
 	TIMSK0 = (1<<TOIE0);			// enable timer0 overflow Interrupt
@@ -58,6 +60,15 @@ int main(void)
 	
 	while (1)
 	{
+		if( adcTemp < targetTemp && valvestate != VALVE_OPEN )
+		{
+			openValve();
+		}
+		else if( valvestate != VALVE_CLOSED )
+		{
+			closeValve();
+		}
+								
 		if( menuButtonPressed() )
 		{
 			switch( runstate )

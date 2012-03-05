@@ -21,7 +21,19 @@
 #include "../Controls/Controls.h"
 #include "../Main.h"
 
+typedef enum {
+	VALVE_OPENING,
+	VALVE_OPEN,
+	VALVE_CLOSING,
+	VALVE_CLOSED,
+	VALVE_UNKNOWN
+} VALVESTATE;
+
+extern volatile VALVESTATE valvestate;
+
 void initValve( void );
 void doProbe( void );
+void openValve( void );
+void closeValve( void );
 
 #endif

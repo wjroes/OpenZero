@@ -6,6 +6,8 @@
  */ 
 #include "Valve.h"
 
+volatile VALVESTATE valvestate = VALVE_UNKNOWN;
+
 void initValve( void )
 {
 	DDRE |= (1<<DDE6)|(1<<DDE7);	// Pin E6 / Pin E7 provide power to the motor and are both outputs
@@ -38,31 +40,19 @@ void doProbe( void )
 	
 	OPTO_SENSOR_ON;
 	
-	probingphase = PROBING_RUNNING_CW;
-	RUN_MOTOR_CW;
-	while( probingphase == PROBING_RUNNING_CW ) ;
-
-	STOP_MOTOR;
+	openValve();
 	
 	while( !okButtonPressed() ) ;
 	
-	probingphase = PROBING_RUNNING_CCW;
-	RUN_MOTOR_CCW;
-	while( probingphase == PROBING_RUNNING_CCW ) ;
-	
-	STOP_MOTOR;
+	closeValve();
 	
 	while( !okButtonPressed() ) ;
 
-	probingphase = PROBING_RUNNING_CW;
-	RUN_MOTOR_CW;
-	while( probingphase == PROBING_RUNNING_CW ) ;
-
-	STOP_MOTOR;
+	openValve();
 	
 	probingphase = PROBING_END;
 
-	ADCSRA &= ~((1<<ADEN)|(1<<ADIE));					// disable ADC
+	ADCSRA &= ~((1<<ADEN)|(1<<ADIE));				// disable ADC
 
 	OPTO_SENSOR_OFF;
 	
@@ -71,3 +61,29 @@ void doProbe( void )
 	runstate = NORMAL_STATE;
 }	
 
+void openValve( void )
+{
+	valvestate = VALVE_OPENING;
+	
+	probingphase = PROBING_RUNNING_CW;
+	RUN_MOTOR_CW;
+	while( probingphase == PROBING_RUNNING_CW ) ;
+
+	valvestate = VALVE_OPEN;
+	
+	STOP_MOTOR;
+}	
+
+void closeValve( void )
+{
+	valvestate = VALVE_CLOSING;
+	
+	probingphase = PROBING_RUNNING_CCW;
+	RUN_MOTOR_CCW;
+	while( probingphase == PROBING_RUNNING_CCW ) ;
+	
+	valvestate = VALVE_CLOSED;
+
+	STOP_MOTOR;
+}
+	
