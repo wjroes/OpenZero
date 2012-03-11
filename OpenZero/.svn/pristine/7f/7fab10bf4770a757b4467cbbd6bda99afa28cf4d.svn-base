@@ -1,0 +1,33 @@
+#ifndef _MAIN_H
+#define _MAIN_H
+
+#ifndef F_CPU
+	#define F_CPU					1000000UL
+#endif
+
+typedef enum {
+	NORMAL_STATE,
+	MENU_STATE,
+	PROBING_STATE,
+	TIMESET_STATE,
+	TEMPSET_STATE,
+	VALVE_STATE
+} RUNSTATE;
+	
+typedef enum {
+	TIMESET_UNKNOWN,
+	TIMESET_START,
+	TIMESET_HOURS,
+	TIMESET_MINUTES,
+	TIMESET_DATE,
+	TIMESET_MONTH,
+	TIMESET_YEAR,
+	TIMESET_END
+} TIMESETPHASE;
+
+extern volatile RUNSTATE runstate;	
+extern volatile TIMESETPHASE timesetphase;
+extern volatile unsigned int adcValue;
+extern volatile unsigned int adcVref;
+
+#endif

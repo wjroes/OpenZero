@@ -1,0 +1,464 @@
+/*
+ * Main.c
+ *
+ * Created: 15-2-2012 21:16:33
+ *  Author: Willem
+ */ 
+#ifndef F_CPU
+	#define F_CPU					1000000UL
+#endif
+
+#define SET_HISPEED				cli();CLKPR=(1<<CLKPCE);CLKPR=0
+#define RESET_SPEED				cli();CLKPR=(1<<CLKPCE);CLKPR=(1<<CLKPS1)|(1<<CLKPS0)
+
+#include <avr/io.h>
+#include <avr/interrupt.h>
+#include <util/delay.h>
+#include <avr/eeprom.h>
+#include <avr/sleep.h>
+
+#include "Main.h"
+#include "Time/Rtc.h"
+#include "Lcd/Lcd.h"
+#include "Lcd/ZeroLcd.h"
+#include "Valve/Valve.h"
+#include "Temperature/Temp.h"
+#include "Controls/Controls.h"
+
+volatile RUNSTATE runstate = NORMAL_STATE;	
+volatile TIMESETPHASE timesetphase = TIMESET_UNKNOWN;
+volatile MAINMENU mainmenu = TEMP;
+
+volatile unsigned int adcValue = 0;						// in V x 1000
+volatile unsigned int adcVref = 3000;					// in V x 1000
+volatile unsigned int adcTemp = 0;
+
+unsigned int bufIndex = 0;
+unsigned char spi[12] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+
+volatile unsigned char receiveDone = 0;
+volatile unsigned int extTemp = 0;
+
+unsigned char readSpi( void )
+{
+	unsigned char read = 0x00;
+			
+	do {
+		
+		do {// wait for a rising edge on SCK
+			
+			// if, in the meantime, SS went high, transmission has finished and we should have received 8 bits (MSB first)
+			if( bit_is_set( PINB, PINB3 ) )
+				return read;
+				
+		} while( bit_is_clear( PINB, PINB1) );
+							
+		// SCK went high
+		read <<= 1;
+		if( bit_is_set( PINB, PINB2 ) )
+			read++;
+
+		// wait until a falling clock edge
+		while( bit_is_set( PINB, PINB1 ) );
+		
+	} while( bit_is_clear( PINB, PINB3 ) );
+	
+	return read;
+}
+
+int main(void)
+{
+	initLCD();
+
+	/* PIN B1 = SCK is input */
+	PORTB |= (1<<PB1);					// Enable pull-up on SCK = PINB1
+	
+	/* PIN B2 = MOSI = DATA is input because we are slave */
+	PORTB |= (1<<PB2);					// Enable pull-up on MOSI = PINB2
+	
+	/* PIN B3 = SS is input */
+	PORTB |= (1<<PB3);					// Enable pull-up on SS = PINB3
+	
+	while( 1 )
+	{
+		// if SS is pulled low, a new frame starts
+		if( bit_is_clear( PINB, PINB3 ) )
+		{
+			unsigned char spiByte = readSpi();
+			if( spiByte == 0xAA )
+			{
+				unsigned long temp = spi[1];
+				temp <<= 8;
+				temp += spi[0];
+				LCD_writeNum(temp);
+				bufIndex = 0;
+			}
+			else
+			{
+				spi[bufIndex++] = spiByte;
+			}				
+		}	
+	}	
+
+	initRTC();
+	initControls();
+	initValve();
+
+	// timer0 is being used as a global 'heartbeat'
+	// i.e. for blinking in the LCD
+	// and for running a temperature check at regular intervals
+	TCCR0A = (1<<CS02)|(1<<CS00);	// timer clock = system clock / 1024
+	TIFR0 = (1<<TOV0);				// clear pending interrupts
+	TIMSK0 = (1<<TOIE0);			// enable timer0 overflow Interrupt
+	
+	sei();							// Enable Global Interrupts
+	
+	// start a probe run to find the "fully open" and "fully closed" positions
+	doProbe();
+
+	// initialize the NTC sensor and start the 1st measurement
+	// consequent measurements will be done every tick
+	initTemp();
+	
+	runstate = NORMAL_STATE;
+	
+	closeValve();
+	
+	while (1)
+	{
+
+		if( adcTemp < targetTemp && valvestate != VALVE_OPEN )
+		{
+			openValve();
+		}
+		else if( adcTemp >= targetTemp && valvestate != VALVE_CLOSED )
+		{
+			closeValve();
+		}
+								
+		if( menuButtonPressed() )
+		{
+			switch( runstate )
+			{
+				case NORMAL_STATE :
+					runstate = MENU_STATE;
+					break;
+						
+				default :
+					runstate = NORMAL_STATE;
+					break;
+			}
+		} // end if( menuButtonPressed )
+		
+		if( timeButtonPressed() )
+		{
+			switch( runstate )
+			{
+				case NORMAL_STATE :
+					runstate = TIMESET_STATE;
+					timesetphase = TIMESET_START;
+						
+					_delay_ms( 500 );
+						
+					// show time with hours blinking
+					timesetphase = TIMESET_YEAR;
+					break;
+						
+				default :
+					runstate = NORMAL_STATE;
+					break;
+			}
+		} // end if( timeButtonPressed )
+
+		if( okButtonPressed() )
+		{
+			switch( runstate )
+			{
+				case MENU_STATE :
+					switch( mainmenu )
+					{
+						case TEMP :
+							runstate = TEMPSET_STATE;
+							break;
+							
+						case TIME :
+							runstate = TIMESET_STATE;
+							timesetphase = TIMESET_START;
+						
+							_delay_ms( 500 );
+						
+							// show time with hours blinking
+							timesetphase = TIMESET_YEAR;
+							break;
+							
+						default:
+							break;
+					}
+					break;					
+
+				case TEMPSET_STATE :
+					runstate = MENU_STATE;
+					break;
+				
+				case TIMESET_STATE :
+					switch( timesetphase )
+					{
+						case TIMESET_YEAR :
+							timesetphase = TIMESET_MONTH;
+							break;
+						
+						case TIMESET_MONTH :
+							timesetphase = TIMESET_DATE;
+							break;
+						
+						case TIMESET_DATE :
+							timesetphase = TIMESET_HOURS;
+							break;
+						
+						case TIMESET_HOURS :
+							timesetphase = TIMESET_MINUTES;
+							break;
+						
+						case TIMESET_MINUTES :
+							timesetphase = TIMESET_YEAR;
+							break;
+								
+						default :
+							break;
+					}
+					break;
+													
+				default :
+					break;
+			}
+		} // end if( okButtonPressed )
+		
+		ROTARYBUTTON rotaryButton = readRotaryButton();
+
+		if( rotaryButton == ROTARY_UP )
+		{
+			switch( runstate )
+			{
+				case NORMAL_STATE :
+				case MENU_STATE :
+					mainmenu++;
+					if( mainmenu == LAST_ITEM )
+						mainmenu = 0;
+				break;
+						
+				case TIMESET_STATE :
+					increaseClock( timesetphase );
+					break;
+						
+				case TEMPSET_STATE :
+					if( targetTemp >= 500 )
+						targetTemp = 0;
+					else
+						targetTemp += 5;
+					break;
+				
+				default :
+					break;
+			}
+		} // end if( BUTTON_UP_PRESSED )
+
+		if( rotaryButton == ROTARY_DOWN )
+		{
+			switch( runstate )
+			{
+				case NORMAL_STATE :
+				case MENU_STATE :
+					if( mainmenu == 0 )
+						mainmenu = LAST_ITEM;
+					mainmenu--;
+				break;
+						
+				case TIMESET_STATE :
+					decreaseClock( timesetphase );
+					break;
+						
+				case TEMPSET_STATE :
+					if( targetTemp == 0 )
+						targetTemp = MAXTEMP;
+					else
+						targetTemp -= 5;
+					break;
+				
+				default :
+					break;
+			}
+		} // end if( BUTTON_DOWN_PRESSED )
+
+		// go to sleep but wake up if any button is pressed
+		set_sleep_mode( SLEEP_MODE_ADC );
+		sleep_mode();
+
+	} // end while forever
+}
+
+ISR(LCD_vect) 
+{ 
+	return;
+	Lcd_SymbolsOff();	
+
+	if( receiveDone == 1 )
+		LCD_writeText( (unsigned char *)spi );
+
+	
+	if( receiveDone == 1 )
+	{
+
+		extTemp = (unsigned int)spi[1];
+		extTemp <<= 8;
+		extTemp += spi[0];
+		extTemp *= 5;
+	}
+	
+		
+	LCD_showTemp( extTemp );
+	
+	
+	Lcd_SymbolsOff();	
+	Lcd_DaysOff();
+	Lcd_FillBar( 0 );
+	
+	if( ADC_CONVERSION_BUSY )
+		Lcd_Symbol( LOCK, 1 );
+	else
+		Lcd_Symbol( LOCK, 0 );
+	
+	switch( runstate )
+	{
+		case TEMPSET_STATE :
+			Lcd_Symbol( ICE, 1 );
+			LCD_showTemp( targetTemp );
+			break;
+
+		case MENU_STATE :
+			switch( mainmenu )
+			{
+				case TEMP :
+				LCD_writeText((unsigned char *)"TEMP");
+				break;
+				
+				case TIME :
+				LCD_writeText((unsigned char *)"TIME");
+				break;
+				
+				default :
+				LCD_writeText((unsigned char *)"MENU");
+				break;
+			}			
+			break;
+			
+		case TIMESET_STATE :
+			LCD_showDay();
+			switch( timesetphase )
+			{
+				case TIMESET_YEAR :
+					LCD_blinkYears();
+					break;
+		
+				case TIMESET_MONTH :
+					LCD_blinkMonths();
+					break;
+		
+				case TIMESET_DATE :
+					LCD_blinkDate();
+					break;
+		
+				case TIMESET_HOURS :
+					LCD_blinkHours();
+					break;
+		
+				case TIMESET_MINUTES :
+					LCD_blinkMinutes();
+					break;
+					
+				case TIMESET_START :
+				default:
+					LCD_writeText( (unsigned char *)"TIME" );
+					break;
+			}			
+			break;
+			
+		case PROBING_STATE :
+			probingLcdUpdate();
+			break;
+				
+		case VALVE_STATE :		
+			valveLcdUpdate();
+			// note how VALVE_STATE falls through to NORMAL_STATE as well
+			
+		case NORMAL_STATE :
+			switch( mainmenu )
+			{
+				case TEMP :
+					LCD_showTemp( adcTemp );
+					break;
+					
+				case TIME :
+					LCD_showDay();
+					LCD_showTime();
+					LCD_showSecondsBar();
+					break;
+					
+				default:
+					Lcd_Symbol(BAG, 1 );
+					LCD_writeNum( adcValue );
+					break;
+			}
+			break;
+
+		default:
+			break;			
+	}				
+}
+
+ISR( ADC_vect )
+{
+	unsigned long temp;
+	
+	adcValue = ADCL;   
+	adcValue += (ADCH<<8);
+
+	switch( runstate )
+	{
+		case NORMAL_STATE :
+			// Rt = 120k * adc / (1024 - adc )
+			temp = 120 * adcValue;
+			temp /= (1024 - adcValue );			// in k Ohms, this is the calculated R of the NTC based on Vcc
+			
+			adcTemp = findNTCTemp( (unsigned int)temp );
+
+			ADCSRA &= ~(1<<ADEN)|(1<<ADIE);		// disable ADC
+			NTC_SENSOR_OFF;
+		
+			break;
+			
+		case PROBING_STATE :
+			probingAdcUpdate();
+						
+			// restart conversion
+			ADCSRA |= (1<<ADSC);							
+			break;
+			
+		case VALVE_STATE :
+			valveAdcUpdate();
+						
+			// restart conversion
+			ADCSRA |= (1<<ADSC);							
+			break;
+			
+		default:
+			break;
+	}	
+}
+
+ISR(TIMER0_OVF_vect) 
+{ 
+	LCD_tick();
+	
+	NTC_SENSOR_ON;
+	ADCSRA |= (1<<ADSC);							// start conversion
+}

@@ -1,0 +1,164 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <SchemaVersion>2.0</SchemaVersion>
+    <ProjectVersion>5.1</ProjectVersion>
+    <ProjectGuid>{91d03b53-d33e-4bca-b5a3-555b147c4310}</ProjectGuid>
+    <avrdevice>ATmega169P</avrdevice>
+    <avrdeviceseries>none</avrdeviceseries>
+    <OutputType>Executable</OutputType>
+    <Language>C</Language>
+    <OutputDirectory>$(MSBuildProjectDirectory)\$(Configuration)</OutputDirectory>
+    <AvrGccProjectExtensions>
+    </AvrGccProjectExtensions>
+    <AssemblyName>ZeroAbove</AssemblyName>
+    <Name>Thermostat</Name>
+    <RootNamespace>ZeroAbove</RootNamespace>
+    <preserveEEPROM>True</preserveEEPROM>
+    <avrtool>com.atmel.avrdbg.tool.simulator</avrtool>
+    <com_atmel_avrdbg_tool_simulator>
+      <ToolType xmlns="">com.atmel.avrdbg.tool.simulator</ToolType>
+      <ToolName xmlns="">AVR Simulator</ToolName>
+      <ToolNumber xmlns="">
+      </ToolNumber>
+      <Channel xmlns="">
+        <host>127.0.0.1</host>
+        <port>50039</port>
+        <ssl>False</ssl>
+      </Channel>
+    </com_atmel_avrdbg_tool_simulator>
+    <avrtoolinterface />
+    <ToolchainName>com.Atmel.AVRGCC8</ToolchainName>
+    <ToolchainFlavour>Native</ToolchainFlavour>
+    <AsfVersion>2.11.1</AsfVersion>
+    <AsfFrameworkConfig>
+      <framework-data xmlns="">
+        <options>
+          <option id="common.utils.interrupt" value="Add" config="" content-id="Atmel.ASF" />
+        </options>
+        <files>
+          <file path="src/asf/common/utils/interrupt.h" framework="" version="" source="common\utils\interrupt.h" changed="False" content-id="Atmel.ASF" />
+          <file path="src/asf/common/utils/interrupt/interrupt_avr8.h" framework="" version="" source="common\utils\interrupt\interrupt_avr8.h" changed="False" content-id="Atmel.ASF" />
+        </files>
+        <documentation help="" />
+      </framework-data>
+    </AsfFrameworkConfig>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)' == 'Release' ">
+    <PostBuildEvent>avrdude -c usbasp -p m169 -U flash:w:$(OutputDirectory)\$(SolutionName).hex:i</PostBuildEvent>
+    <OutputFileName>OpenZero</OutputFileName>
+    <OutputFileExtension>.elf</OutputFileExtension>
+    <ToolchainSettings>
+      <AvrGcc>
+        <avrgcc.compiler.general.ChangeDefaultCharTypeUnsigned>True</avrgcc.compiler.general.ChangeDefaultCharTypeUnsigned>
+        <avrgcc.compiler.general.ChangeDefaultBitFieldUnsigned>True</avrgcc.compiler.general.ChangeDefaultBitFieldUnsigned>
+        <avrgcc.compiler.directories.IncludePaths>
+          <ListValues>
+            <Value>../src/asf/common/utils</Value>
+          </ListValues>
+        </avrgcc.compiler.directories.IncludePaths>
+        <avrgcc.compiler.optimization.level>Optimize for size (-Os)</avrgcc.compiler.optimization.level>
+        <avrgcc.compiler.optimization.PackStructureMembers>True</avrgcc.compiler.optimization.PackStructureMembers>
+        <avrgcc.compiler.optimization.AllocateBytesNeededForEnum>True</avrgcc.compiler.optimization.AllocateBytesNeededForEnum>
+        <avrgcc.compiler.warnings.AllWarnings>True</avrgcc.compiler.warnings.AllWarnings>
+        <avrgcc.linker.libraries.Libraries>
+          <ListValues>
+            <Value>m</Value>
+          </ListValues>
+        </avrgcc.linker.libraries.Libraries>
+        <avrgcc.assembler.general.IncludePaths>
+          <ListValues>
+            <Value>../src/asf/common/utils</Value>
+          </ListValues>
+        </avrgcc.assembler.general.IncludePaths>
+      </AvrGcc>
+    </ToolchainSettings>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
+    <PostBuildEvent>
+    </PostBuildEvent>
+    <OutputFileName>OpenZero</OutputFileName>
+    <OutputFileExtension>.elf</OutputFileExtension>
+    <ToolchainSettings>
+      <AvrGcc>
+        <avrgcc.compiler.general.ChangeDefaultCharTypeUnsigned>True</avrgcc.compiler.general.ChangeDefaultCharTypeUnsigned>
+        <avrgcc.compiler.general.ChangeDefaultBitFieldUnsigned>True</avrgcc.compiler.general.ChangeDefaultBitFieldUnsigned>
+        <avrgcc.compiler.directories.IncludePaths>
+          <ListValues>
+            <Value>../src/asf/common/utils</Value>
+          </ListValues>
+        </avrgcc.compiler.directories.IncludePaths>
+        <avrgcc.compiler.optimization.level>Optimize (-O1)</avrgcc.compiler.optimization.level>
+        <avrgcc.compiler.optimization.PackStructureMembers>True</avrgcc.compiler.optimization.PackStructureMembers>
+        <avrgcc.compiler.optimization.AllocateBytesNeededForEnum>True</avrgcc.compiler.optimization.AllocateBytesNeededForEnum>
+        <avrgcc.compiler.warnings.AllWarnings>True</avrgcc.compiler.warnings.AllWarnings>
+        <avrgcc.compiler.warnings.WarningsAsErrors>True</avrgcc.compiler.warnings.WarningsAsErrors>
+        <avrgcc.linker.libraries.Libraries>
+          <ListValues>
+            <Value>m</Value>
+          </ListValues>
+        </avrgcc.linker.libraries.Libraries>
+        <avrgcc.linker.memorysettings.InitialStack>0x400</avrgcc.linker.memorysettings.InitialStack>
+        <avrgcc.assembler.general.IncludePaths>
+          <ListValues>
+            <Value>../src/asf/common/utils</Value>
+          </ListValues>
+        </avrgcc.assembler.general.IncludePaths>
+        <avrgcc.assembler.debugging.DebugLevel>Default (-Wa,-g2)</avrgcc.assembler.debugging.DebugLevel>
+      </AvrGcc>
+    </ToolchainSettings>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="Controls\Controls.c">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="Controls\Controls.h">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="Lcd\Lcd.c">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="Lcd\Lcd.h">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="Lcd\ZeroLcd.c">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="Lcd\ZeroLcd.h">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="Main.c">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="Main.h">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="Temperature\Temp.c">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="Temperature\Temp.h">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="Time\Rtc.c">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="Time\Rtc.h">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="Valve\Valve.c">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="Valve\Valve.h">
+      <SubType>compile</SubType>
+    </Compile>
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="Lcd" />
+    <Folder Include="Controls" />
+    <Folder Include="Docs" />
+    <Folder Include="Valve" />
+    <Folder Include="Temperature" />
+    <Folder Include="Time" />
+  </ItemGroup>
+  <Import Project="$(AVRSTUDIO_EXE_PATH)\\Vs\\AvrGCC.targets" />
+</Project>

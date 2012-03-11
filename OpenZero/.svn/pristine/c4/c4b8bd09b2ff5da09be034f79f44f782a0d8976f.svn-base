@@ -1,0 +1,61 @@
+#ifndef _VALVE_H  
+#define _VALVE_H
+
+#ifndef F_CPU
+	#define F_CPU		1000000UL
+#endif
+
+#define ADC_THRESHOLD_CLOSE		970			// adc value cut off point while closing
+#define ADC_THRESHOLD_OPEN		970			// adc value cut off point while opening
+
+#define ADC_CONVERSION_BUSY		bit_is_set( ADCSRA, ADSC )
+			
+#define RUN_MOTOR_CW			PORTE |= (1<<PE7)&~(1<<PE6)
+#define RUN_MOTOR_CCW			PORTE |= (1<<PE6)&~(1<<PE7)
+#define STOP_MOTOR				PORTE &= ~((1<<PE6)|(1<<PE7))
+
+#define OPTO_SENSOR_ON			PORTE |= (1<<PE2);
+#define OPTO_SENSOR_OFF			PORTE &= ~(1<<PE2);
+
+#include <avr/io.h>
+#include <avr/interrupt.h>
+#include <util/delay.h>
+#include <avr/eeprom.h>
+#include <avr/sleep.h>
+
+#include "../Lcd/Lcd.h"
+#include "../Controls/Controls.h"
+#include "../Main.h"
+
+typedef enum {
+	PROBING_UNKNOWN,
+	PROBING_START,
+	PROBING_RUNNING_CCW,
+	PROBING_END_CCW,
+	PROBING_RUNNING_CW,
+	PROBING_END_CW,
+	PROBING_END
+} PROBINGPHASE;
+
+typedef enum {
+	VALVE_OPENING,
+	VALVE_OPEN,
+	VALVE_CLOSING,
+	VALVE_CLOSED,
+	VALVE_UNKNOWN
+} VALVESTATE;
+
+extern volatile VALVESTATE valvestate;
+
+void initValve( void );
+void doProbe( void );
+void openValve( void );
+void closeValve( void );
+
+void probingLcdUpdate( void );
+void probingAdcUpdate( void );
+void valveReflectorPulse( void );
+void valveAdcUpdate( void );
+void valveLcdUpdate( void );
+
+#endif

@@ -1,0 +1,249 @@
+/*
+ * Valve.c
+ *
+ * Created: 3-3-2012 14:05:45
+ *  Author: Willem
+ */ 
+#include "Valve.h"
+
+volatile PROBINGPHASE probingphase = PROBING_UNKNOWN;
+volatile VALVESTATE valvestate = VALVE_UNKNOWN;
+volatile unsigned int revCounter = 0;
+
+void initValve( void )
+{
+	DDRE |= (1<<DDE6)|(1<<DDE7);	// Pin E6 / Pin E7 provide power to the motor and are both outputs
+	DDRE |= (1<<DDE2);				// Pin E2 provides power to the opto-sensor LED and is output
+
+	DDRE &= ~(1<<DDE1);				// PINE1 = PCINT1 attached to opto-sensor collector is input
+	PORTE |= (1<<PE1);				// PINE1 = PCINT1 attached to opto-sensor collector, enable internal pull-up
+	
+	EIFR = 0x00;					// Clear all external interrupt flags
+	EIMSK = (1<<PCIE0);				// Enable interrupt-on-change interrupts for PCINT0-PCINT7
+	PCMSK0 = (1<<PCINT1);			// But only mask PCINT1
+}
+
+void doProbe( void )
+{
+	runstate = PROBING_STATE;
+	
+	LCD_writeText( (unsigned char *)"PROB" );
+	_delay_ms( 1000 );
+	
+	// take some time to take a measurement without the motor running, go to sleep and wake up if the measurements are done
+	set_sleep_mode( SLEEP_MODE_ADC );
+	sleep_mode();
+	
+	openValve();
+	
+	while( !okButtonPressed() ) ;
+	
+	closeValve();
+	
+	while( !okButtonPressed() ) ;
+
+	openValve();
+	
+	while( !okButtonPressed() ) ;
+	
+	closeValve();
+	
+	LCD_writeText( (unsigned char *)"DONE" );
+	_delay_ms( 1000 );
+	
+	runstate = NORMAL_STATE;
+}	
+
+void openValve( void )
+{
+	RUNSTATE keepstate = runstate;
+	
+	if( runstate != PROBING_STATE )
+		runstate = VALVE_STATE;
+
+	ADCSRA = 0x00;									// disable ADC
+	ADMUX = (1<<REFS0)|(1<<MUX1);					// ref. voltage = AVcc, channel = ADC2
+	ADCSRA = (1<<ADPS2);							// 1:16 prescaler
+	
+	ADCSRA |= (1<<ADEN)|(1<<ADIE);					// enable ADC
+	ADCSRA |= (1<<ADSC);							// start first conversion
+	
+	OPTO_SENSOR_ON;
+	
+	valvestate = VALVE_OPENING;
+	RUN_MOTOR_CW;
+	while( valvestate == VALVE_OPENING ) ;
+
+	OPTO_SENSOR_OFF;
+	
+	STOP_MOTOR;
+	
+	ADCSRA &= ~((1<<ADEN)|(1<<ADIE));				// disable ADC
+	
+	runstate = keepstate;
+}	
+
+void closeValve( void )
+{
+	RUNSTATE keepstate = runstate;
+	
+	if( runstate != PROBING_STATE )
+		runstate = VALVE_STATE;
+
+	ADCSRA = 0x00;									// disable ADC
+	ADMUX = (1<<REFS0)|(1<<MUX1);					// ref. voltage = AVcc, channel = ADC2
+	ADCSRA = (1<<ADPS2);							// 1:16 prescaler
+	
+	ADCSRA |= (1<<ADEN)|(1<<ADIE);					// enable ADC
+	ADCSRA |= (1<<ADSC);							// start first conversion
+	
+	OPTO_SENSOR_ON;
+	
+	valvestate = VALVE_CLOSING;
+	RUN_MOTOR_CCW;
+	while( valvestate == VALVE_CLOSING ) ;
+
+	OPTO_SENSOR_OFF;
+
+	STOP_MOTOR;
+	
+	ADCSRA &= ~((1<<ADEN)|(1<<ADIE));				// disable ADC
+	
+	runstate = keepstate;
+}
+	
+void probingLcdUpdate( void )
+{
+	switch( valvestate )
+	{
+		case VALVE_CLOSING :
+			LCD_blinkSymbol( OUTSIDE );
+			LCD_writeNum( adcValue );
+			break;
+					
+		case VALVE_CLOSED :
+			Lcd_Symbol( OUTSIDE, 1 );
+			LCD_writeText( (unsigned char *)"CLSD" );
+			break;
+
+		case VALVE_OPENING :
+			LCD_blinkSymbol( INSIDE );
+			LCD_writeNum( adcValue );
+			break;
+				
+		case VALVE_OPEN :
+			Lcd_Symbol( INSIDE, 1 );
+			LCD_writeText( (unsigned char *)"OPEN" );
+			break;
+
+		default :
+			LCD_writeNum( adcVref );
+			break;
+	}
+}						
+
+void valveLcdUpdate( void )
+{			
+	switch( valvestate )
+	{
+		case VALVE_OPENING :
+			LCD_blinkSymbol( INSIDE );
+			break;
+							
+		case VALVE_OPEN :
+			Lcd_Symbol( INSIDE, 1 );
+			break;
+							
+		case VALVE_CLOSING :
+			LCD_blinkSymbol( OUTSIDE );
+			break;
+							
+		case VALVE_CLOSED :
+			Lcd_Symbol( OUTSIDE, 1 );
+			break;
+							
+		default :
+			break;
+	}					
+}
+			
+void probingAdcUpdate( void )
+{
+	unsigned long temp;
+	
+	switch( valvestate )
+	{
+		case VALVE_OPENING :
+			if( adcValue < ADC_THRESHOLD_OPEN )
+			{
+				LCD_writeText( (unsigned char *)"REVS");
+				_delay_ms( 1000 );
+				LCD_writeNum( revCounter );
+				revCounter = 0;
+				_delay_ms( 3000 );
+					
+				valvestate = VALVE_OPEN;
+			}	
+			break;
+			
+		case VALVE_CLOSING :
+			if( adcValue < ADC_THRESHOLD_CLOSE )
+			{
+				LCD_writeText( (unsigned char *)"REVS");
+				_delay_ms( 1000 );
+				LCD_writeNum( revCounter );
+				revCounter = 0;
+				_delay_ms( 3000 );
+					
+				valvestate = VALVE_CLOSED;
+			}				
+			break;
+		
+		default:
+			temp = adcValue;
+			temp *= 3000;
+			temp /= 1024;
+			adcVref = temp;		// in V x 1000
+			break;
+	}
+}
+
+void valveAdcUpdate( void )
+{
+	switch( valvestate )
+	{
+		case VALVE_OPENING :
+			if( adcValue < ADC_THRESHOLD_OPEN )
+			{
+				LCD_writeText( (unsigned char *)"OPEN");
+				_delay_ms( 1000 );
+
+				revCounter = 0;
+					
+				valvestate = VALVE_OPEN;
+			}	
+			break;
+			
+		case VALVE_CLOSING :
+			if( adcValue < ADC_THRESHOLD_CLOSE )
+			{
+				LCD_writeText( (unsigned char *)"CLSD");
+				_delay_ms( 1000 );
+
+				revCounter = 0;
+					
+				valvestate = VALVE_CLOSED;
+			}				
+			break;
+		
+		default:
+			break;
+	}
+}
+
+void valveReflectorPulse( void )
+{
+	// opto-sensor pulse
+	revCounter++;
+}
+
